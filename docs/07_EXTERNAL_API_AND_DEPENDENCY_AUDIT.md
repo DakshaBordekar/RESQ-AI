@@ -744,6 +744,7 @@ Every audited service is strictly categorized according to the project governanc
 |---|---|---|---|---|---|---|
 | `OPENAI_API_KEY` | OpenRouter / OpenAI | **YES (CONFIGURED)** | `apps.ai` | Enables GPT-4o-mini structured entity extraction | **YES** | `sk-or-v1-...` |
 | `OPENAI_BASE_URL` | OpenRouter | **YES (CONFIGURED)** | `apps.ai` | Points LLM client to OpenRouter gateway | NO | `https://openrouter.ai/api/v1` |
+| `WEATHER_API_KEY` | OpenWeatherMap | **YES (CONFIGURED)** | `apps.simulation` | Live meteorological telemetry ingestion (Chennai sector) | **YES** | `9d01f228...` |
 | `AI_PROVIDER` | Internal Config | **YES** (Category A) | `apps.ai` | Selects AI provider mode (`openai` vs `local_mock`) | NO | `"openai"` |
 | `DATABASE_URL` | PostgreSQL | **YES** (Category A) | `config.settings` | Connects Django ORM to database | **YES** | `"postgres://localhost:5432/resq_ai"` |
 | `SECRET_KEY` | Django | **YES** (Category A) | `config.settings` | Cryptographic signing of sessions & JWT tokens | **YES** | Local dev key (Generated) |

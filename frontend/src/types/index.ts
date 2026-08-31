@@ -140,3 +140,18 @@ export interface AnalyticsSummary {
     network_health_pct: number;
   };
 }
+
+export interface WeatherTelemetry {
+  provider: string;
+  is_live: boolean;
+  location: string;
+  condition: string;
+  description: string;
+  icon: string;
+  temperature_c: number;
+  humidity_pct: number;
+  wind_speed_kmh: number;
+  rainfall_1h_mm: number;
+  pressure_hpa: number;
+  timestamp: number;
+}

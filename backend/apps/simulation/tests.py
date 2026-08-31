@@ -28,3 +28,11 @@ class SimulationEngineTestCase(TestCase):
         self.seg.refresh_from_db()
         self.assertEqual(self.seg.status, RoadSegment.Status.BLOCKED)
         self.assertIn('BLOCKED', impact['effects'][0])
+
+    def test_weather_service_telemetry_resilience(self):
+        from apps.simulation.services.weather_service import WeatherService
+        weather = WeatherService.get_current_weather(13.0827, 80.2707)
+        self.assertIn('temperature_c', weather)
+        self.assertIn('wind_speed_kmh', weather)
+        self.assertIn('condition', weather)
+        self.assertIn('provider', weather)

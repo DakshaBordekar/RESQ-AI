@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Incident, Resource, Hospital, RoadSegment, Dispatch, SimulationScenario, AnalyticsSummary } from '../types';
+import { Incident, Resource, Hospital, RoadSegment, Dispatch, SimulationScenario, AnalyticsSummary, WeatherTelemetry } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
 
@@ -116,6 +116,11 @@ export const resetSimulation = async () => {
 // Analytics & EAP
 export const getAnalyticsSummary = async (): Promise<AnalyticsSummary> => {
   const res = await apiClient.get('/analytics/summary/');
+  return res.data;
+};
+
+export const getWeatherTelemetry = async (): Promise<WeatherTelemetry> => {
+  const res = await apiClient.get('/simulation/weather/');
   return res.data;
 };
 

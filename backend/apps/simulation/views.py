@@ -32,6 +32,14 @@ class SimulationViewSet(viewsets.ModelViewSet):
         result = SimulationEngine.step_simulation(step_minutes=minutes)
         return Response(result, status=status.HTTP_200_OK)
 
+    @action(detail=False, methods=['get'], url_path='weather')
+    def weather(self, request):
+        from apps.simulation.services.weather_service import WeatherService
+        lat = float(request.query_params.get('lat', 13.0827))
+        lon = float(request.query_params.get('lon', 80.2707))
+        weather_data = WeatherService.get_current_weather(lat=lat, lon=lon)
+        return Response(weather_data, status=status.HTTP_200_OK)
+
     @action(detail=False, methods=['post'], url_path='reset')
     def reset(self, request):
         """Resets simulation and reseeds the baseline Chennai scenario."""

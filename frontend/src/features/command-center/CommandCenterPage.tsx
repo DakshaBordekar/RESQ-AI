@@ -7,13 +7,14 @@ import {
   getDispatches,
   getActiveScenario,
   getAnalyticsSummary,
+  getWeatherTelemetry,
   runOptimization,
   approveDispatch,
   toggleRoadBlockage,
   injectSimulationEvent,
   resetSimulation,
 } from '../../services/api';
-import { Incident, Resource, Hospital, RoadSegment, Dispatch, SimulationScenario, AnalyticsSummary } from '../../types';
+import { Incident, Resource, Hospital, RoadSegment, Dispatch, SimulationScenario, AnalyticsSummary, WeatherTelemetry } from '../../types';
 import { Header } from '../../components/layout/Header';
 import { IncidentQueuePanel } from './IncidentQueuePanel';
 import { SituationMap } from '../../components/map/SituationMap';
@@ -31,6 +32,7 @@ export const CommandCenterPage: React.FC = () => {
   const [dispatches, setDispatches] = useState<Dispatch[]>([]);
   const [scenario, setScenario] = useState<SimulationScenario | undefined>();
   const [analytics, setAnalytics] = useState<AnalyticsSummary | undefined>();
+  const [weather, setWeather] = useState<WeatherTelemetry | undefined>();
 
   // Selected Item State
   const [selectedIncident, setSelectedIncident] = useState<Incident | undefined>();
@@ -43,7 +45,7 @@ export const CommandCenterPage: React.FC = () => {
   // Fetch all live data
   const fetchData = async () => {
     try {
-      const [inc, res, hosp, roads, disp, scen, ana] = await Promise.all([
+      const [inc, res, hosp, roads, disp, scen, ana, weath] = await Promise.all([
         getIncidents(),
         getResources(),
         getHospitals(),
@@ -51,6 +53,7 @@ export const CommandCenterPage: React.FC = () => {
         getDispatches(),
         getActiveScenario().catch(() => undefined),
         getAnalyticsSummary().catch(() => undefined),
+        getWeatherTelemetry().catch(() => undefined),
       ]);
       setIncidents(inc);
       setResources(res);
@@ -59,6 +62,7 @@ export const CommandCenterPage: React.FC = () => {
       setDispatches(disp);
       if (scen) setScenario(scen);
       if (ana) setAnalytics(ana);
+      if (weath) setWeather(weath);
 
       // Auto-select first critical incident if none selected
       if (!selectedIncident && inc.length > 0) {
@@ -160,6 +164,7 @@ export const CommandCenterPage: React.FC = () => {
       {/* 1. Global Header */}
       <Header
         scenario={scenario}
+        weather={weather}
         onOpenIntake={() => setIsIntakeOpen(true)}
         onRunOptimization={handleRunOptimization}
         onResetDemo={handleResetDemo}

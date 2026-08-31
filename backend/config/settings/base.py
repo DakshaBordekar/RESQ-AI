@@ -12,6 +12,7 @@ env = environ.Env(
     AI_PROVIDER=(str, 'local_mock'),
     OPENAI_API_KEY=(str, ''),
     OPENAI_BASE_URL=(str, 'https://openrouter.ai/api/v1'),
+    WEATHER_API_KEY=(str, '9d01f228f9aa69130803b730b1d95034'),
     CORS_ALLOWED_ORIGINS=(list, [
         'http://localhost:5173',
         'http://127.0.0.1:5173',
@@ -129,3 +130,6 @@ CORS_ALLOW_CREDENTIALS = True
 AI_PROVIDER = env('AI_PROVIDER')
 OPENAI_API_KEY = env('OPENAI_API_KEY')
 OPENAI_BASE_URL = env('OPENAI_BASE_URL')
+
+# Weather Configuration
+WEATHER_API_KEY = env('WEATHER_API_KEY')
