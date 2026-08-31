@@ -14,8 +14,14 @@ class PriorityEngine:
         Computes composite priority score P in [0.00, 100.00] and priority tier.
         """
         # 1. Severity Factor (0 - 100)
-        sev_map = {'CRITICAL': 100.0, 'HIGH': 75.0, 'MEDIUM': 40.0, 'LOW': 15.0}
-        s_score = sev_map.get(str(incident.priority_tier).upper(), 40.0)
+        mobility_val = str(getattr(incident, 'mobility_status', 'AMBULATORY')).upper()
+        if mobility_val == 'TRAPPED':
+            s_score = 100.0
+        elif mobility_val == 'LIMITED':
+            s_score = 75.0
+        else:
+            sev_map = {'CRITICAL': 100.0, 'HIGH': 75.0, 'MEDIUM': 40.0, 'LOW': 15.0}
+            s_score = sev_map.get(str(getattr(incident, 'priority_tier', 'MEDIUM')).upper(), 40.0)
 
         # 2. Vulnerability Factor (0 - 100)
         vulnerable_count = getattr(incident, 'vulnerable_people', 0)
