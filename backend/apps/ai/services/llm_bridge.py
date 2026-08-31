@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 from abc import ABC, abstractmethod
 from typing import Dict, Any
 from django.conf import settings
@@ -18,22 +19,39 @@ class BaseLLMProvider(ABC):
 
 
 class OpenAIProvider(BaseLLMProvider):
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, base_url: str = None):
         from openai import OpenAI
-        self.client = OpenAI(api_key=api_key)
+        
+        # Auto-detect OpenRouter keys or custom base URLs
+        is_openrouter = api_key.startswith("sk-or-v1-") or (base_url and "openrouter" in base_url)
+        resolved_base_url = base_url or ("https://openrouter.ai/api/v1" if is_openrouter else None)
+        self.model = "openai/gpt-4o-mini" if is_openrouter else "gpt-4o-mini"
+        
+        default_headers = {}
+        if is_openrouter:
+            default_headers = {
+                "HTTP-Referer": "http://localhost:5173",
+                "X-Title": "RESQ-AI Disaster Response Command Center"
+            }
+
+        self.client = OpenAI(
+            api_key=api_key,
+            base_url=resolved_base_url,
+            default_headers=default_headers if default_headers else None
+        )
 
     def extract_incident(self, text: str) -> Dict[str, Any]:
         prompt = INCIDENT_EXTRACTION_PROMPT.format(text=text)
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
+                model=self.model,
                 response_format={"type": "json_object"},
                 messages=[
-                    {"role": "system", "content": "You are a crisis response dispatch entity extraction AI."},
+                    {"role": "system", "content": "You are a crisis response dispatch entity extraction AI. Output strictly valid JSON."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.1,
-                timeout=4.0
+                timeout=6.0
             )
             content = response.choices[0].message.content
             return json.loads(content)
@@ -50,13 +68,13 @@ class OpenAIProvider(BaseLLMProvider):
         )
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
+                model=self.model,
                 messages=[
                     {"role": "system", "content": "You are the Chief Emergency Operations Commander."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.3,
-                timeout=5.0
+                timeout=8.0
             )
             return response.choices[0].message.content
         except Exception as e:
@@ -165,6 +183,10 @@ class LocalMockProvider(BaseLLMProvider):
 class LLMBridgeService:
     @classmethod
     def get_provider(cls) -> BaseLLMProvider:
-        if getattr(settings, 'AI_PROVIDER', 'local_mock') == 'openai' and getattr(settings, 'OPENAI_API_KEY', ''):
-            return OpenAIProvider(settings.OPENAI_API_KEY)
+        provider_mode = getattr(settings, 'AI_PROVIDER', 'local_mock')
+        api_key = getattr(settings, 'OPENAI_API_KEY', '')
+        base_url = getattr(settings, 'OPENAI_BASE_URL', None)
+
+        if provider_mode == 'openai' and api_key:
+            return OpenAIProvider(api_key=api_key, base_url=base_url)
         return LocalMockProvider()

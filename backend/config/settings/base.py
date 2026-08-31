@@ -11,6 +11,7 @@ env = environ.Env(
     DATABASE_URL=(str, 'postgres://localhost:5432/resq_ai'),
     AI_PROVIDER=(str, 'local_mock'),
     OPENAI_API_KEY=(str, ''),
+    OPENAI_BASE_URL=(str, 'https://openrouter.ai/api/v1'),
     CORS_ALLOWED_ORIGINS=(list, [
         'http://localhost:5173',
         'http://127.0.0.1:5173',
@@ -127,3 +128,4 @@ CORS_ALLOW_CREDENTIALS = True
 # AI Configuration
 AI_PROVIDER = env('AI_PROVIDER')
 OPENAI_API_KEY = env('OPENAI_API_KEY')
+OPENAI_BASE_URL = env('OPENAI_BASE_URL')
