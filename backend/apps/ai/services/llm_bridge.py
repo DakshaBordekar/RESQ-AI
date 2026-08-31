@@ -1,6 +1,5 @@
 import json
 import logging
-import os
 from abc import ABC, abstractmethod
 from typing import Dict, Any
 from django.conf import settings
@@ -41,32 +40,45 @@ class OpenAIProvider(BaseLLMProvider):
         )
 
     def extract_incident(self, text: str) -> Dict[str, Any]:
-        prompt = INCIDENT_EXTRACTION_PROMPT.format(text=text)
         try:
+            prompt = f"{INCIDENT_EXTRACTION_PROMPT}\n\nDistress Report Text:\n\"{text}\""
             response = self.client.chat.completions.create(
                 model=self.model,
                 response_format={"type": "json_object"},
                 messages=[
-                    {"role": "system", "content": "You are a crisis response dispatch entity extraction AI. Output strictly valid JSON."},
+                    {"role": "system", "content": "You are a crisis response dispatch entity extraction AI. Output strictly valid JSON matching the schema."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.1,
                 timeout=6.0
             )
-            content = response.choices[0].message.content
-            return json.loads(content)
+            content = (response.choices[0].message.content or "").strip()
+            if content.startswith("```json"):
+                content = content[7:]
+            elif content.startswith("```"):
+                content = content[3:]
+            if content.endswith("```"):
+                content = content[:-3]
+            content = content.strip()
+            parsed = json.loads(content)
+            if isinstance(parsed, str):
+                parsed = json.loads(parsed)
+            if not isinstance(parsed, dict) or 'location_name' not in parsed:
+                raise ValueError(f"Incomplete JSON extraction: {parsed}")
+            return parsed
         except Exception as e:
             logger.warning(f"OpenAI extraction failed, falling back to LocalMockProvider: {e}")
             return LocalMockProvider().extract_incident(text)
 
     def generate_action_plan(self, telemetry_context: Dict[str, Any]) -> str:
-        prompt = ACTION_PLAN_PROMPT.format(
-            critical_count=telemetry_context.get('critical_count', 0),
-            dispatched_count=telemetry_context.get('dispatched_count', 0),
-            hospital_summary=telemetry_context.get('hospital_summary', 'Normal'),
-            blocked_roads=telemetry_context.get('blocked_roads', 'None')
-        )
         try:
+            context_str = (
+                f"- Active Critical Incidents: {telemetry_context.get('critical_count', 0)}\n"
+                f"- Dispatched Resources: {telemetry_context.get('dispatched_count', 0)}\n"
+                f"- Evacuation Destination Hospitals: {telemetry_context.get('hospital_summary', 'Normal')}\n"
+                f"- Blocked Road Corridors: {telemetry_context.get('blocked_roads', 'None')}"
+            )
+            prompt = f"{ACTION_PLAN_PROMPT}\n\nCurrent Telemetry Context:\n{context_str}"
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[

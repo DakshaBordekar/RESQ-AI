@@ -153,40 +153,40 @@ Every audited service is strictly categorized according to the project governanc
 ### Category 2: Map Tile Provider
 
 ```
-1. Service Name: CartoDB Dark Matter & OpenStreetMap Standard Tile Layer
-2. Provider: CARTO / OpenStreetMap Foundation
-3. Purpose: Renders high-contrast dark-mode geospatial vector tiles for the Chennai metropolitan area.
+1. Service Name: OpenStreetMap Standard Tile Layer
+2. Provider: OpenStreetMap Foundation
+3. Purpose: Renders standard geospatial vector tiles for map visualization of the disaster response area.
 4. Feature: Master Situation GIS Map.
 5. Django App: None (Direct client-side Leaflet tile rendering).
-6. React Feature: SituationMap.tsx (via react-leaflet TileLayer).
-7. Exact Capabilities Required: Raster XYZ Tile Fetching ({z}/{x}/{y}.png).
-8. API Endpoints Required: https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png
+6. React Feature: SituationMap.tsx (via react-leaflet TileLayer and getActiveMapTileProvider()).
+7. Exact Capabilities Required: Standard Raster XYZ Tile Fetching ({z}/{x}/{y}.png).
+8. API Endpoints Required: https://tile.openstreetmap.org/{z}/{x}/{y}.png
 9. HTTP Methods: GET
-10. Authentication Method: None (Public CORS Tile Endpoint).
-11. API Key Required?: NO
+10. Authentication Method: None (Public Tile Endpoint — OPENSTREETMAP_API_KEY IS NOT REQUIRED).
+11. API Key Required?: NO (OPENSTREETMAP_API_KEY IS NOT REQUIRED FOR STANDARD OSM TILES).
 12. OAuth Required?: NO
 13. Environment Variables: None required (Optional: VITE_MAP_TILE_URL).
-14. Free Tier Available?: Yes (Unrestricted public access for demo/testing).
-15. Paid?: Free for prototype volume.
+14. Free Tier Available?: Yes (Unrestricted public fair-use access).
+15. Paid?: Free.
 16. Expected Cost for Hackathon: $0.00 (Zero Cost).
-17. Rate Limits: Standard fair-use policy (~50,000 tile views/day).
+17. Rate Limits: Standard OSM tile usage policy (Fair use; browser caching enabled).
 18. Quotas: None enforced for hackathon volume.
 19. Data Limits: Standard 256x256 PNG tiles (~15KB per tile).
-20. Geographic Restrictions: None (Global coverage with deep zoom over Chennai).
-21. Reliability Considerations: 99.9% uptime backed by Fastly CDN.
-22. Latency Considerations: <50ms cached edge tile delivery.
+20. Geographic Restrictions: None (Global coverage with high resolution over Chennai).
+21. Reliability Considerations: 99.9% uptime backed by OSM tile cache servers.
+22. Latency Considerations: <60ms cached edge tile delivery.
 23. Privacy Considerations: Zero user data transmitted; only tile coordinate requests.
 24. Data Retention Considerations: None.
-25. Terms / Licensing Considerations: OpenStreetMap contributors (ODbL) + CARTO attribution in map corner.
+25. Terms / Licensing Considerations: OpenStreetMap contributors (ODbL) with visible attribution `&copy; OpenStreetMap contributors`.
 26. Production Suitability: Excellent.
-27. Hackathon Suitability: Maximum.
-28. Fallback Provider: OpenStreetMap Standard Tiles (https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png) or Stamen Dark.
-29. Local Alternative: Pre-cached vector tile MBTiles server or static background SVG.
-30. Setup Difficulty: Zero (Pre-configured in React Leaflet).
+27. Hackathon Suitability: Maximum (Zero credentials or API keys required).
+28. Fallback Provider: Local SVG / pre-cached vector tiles.
+29. Local Alternative: Pre-cached vector tile MBTiles server or static canvas.
+30. Setup Difficulty: Zero.
 31. Estimated Setup Time: 0 minutes.
-32. Risk If Unavailable: Low (Easily swapped to alternate public OSM tile endpoint in 1 line of CSS/JSX).
-33. Priority: CATEGORY A (REQUIRED).
-34. Implementation Location: frontend/src/components/map/SituationMap.tsx
+32. Risk If Unavailable: Low (Tile provider abstraction in `mapProvider.ts` allows instantaneous fallback).
+33. Priority: CATEGORY A (REQUIRED PUBLIC TILE LAYER).
+34. Implementation Location: frontend/src/components/map/SituationMap.tsx, frontend/src/services/mapProvider.ts
 35. Testing Strategy: Browser automated visual verification verifying tile loading and map container pan/zoom.
 ```
 
@@ -744,12 +744,12 @@ Every audited service is strictly categorized according to the project governanc
 |---|---|---|---|---|---|---|
 | `OPENAI_API_KEY` | OpenRouter / OpenAI | **YES (CONFIGURED)** | `apps.ai` | Enables GPT-4o-mini structured entity extraction | **YES** | `sk-or-v1-...` |
 | `OPENAI_BASE_URL` | OpenRouter | **YES (CONFIGURED)** | `apps.ai` | Points LLM client to OpenRouter gateway | NO | `https://openrouter.ai/api/v1` |
-| `VITE_CARTO_API_KEY`| CARTO Basemaps | **YES (CONFIGURED)** | `SituationMap` | Authenticates dark-mode vector tile requests | NO (Public) | `cb1_2nqi_...` |
 | `AI_PROVIDER` | Internal Config | **YES** (Category A) | `apps.ai` | Selects AI provider mode (`openai` vs `local_mock`) | NO | `"openai"` |
 | `DATABASE_URL` | PostgreSQL | **YES** (Category A) | `config.settings` | Connects Django ORM to database | **YES** | `"postgres://localhost:5432/resq_ai"` |
 | `SECRET_KEY` | Django | **YES** (Category A) | `config.settings` | Cryptographic signing of sessions & JWT tokens | **YES** | Local dev key (Generated) |
 | `DEBUG` | Django | **YES** (Category A) | `config.settings` | Enables detailed error traces during dev | NO | `True` |
 | `VITE_API_URL` | Frontend Config | **YES** (Category A) | `frontend.api` | Points Axios client to DRF API root | NO | `"http://localhost:8000/api/v1"` |
+| `VITE_MAP_TILE_URL` | Frontend Config | **NO** (Optional) | `SituationMap` | Optional custom tile layer (Defaults to OSM) | NO | `"https://tile.openstreetmap.org/{z}/{x}/{y}.png"` |
 
 > [!IMPORTANT]
 > **Zero proprietary map, geocoding, routing, SMS, or cloud storage keys are required.** The only optional third-party key in the entire project is `OPENAI_API_KEY`.

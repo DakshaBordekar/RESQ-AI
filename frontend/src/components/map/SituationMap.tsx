@@ -2,6 +2,7 @@ import React from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import { Incident, Resource, Hospital, RoadSegment, Dispatch } from '../../types';
+import { getActiveMapTileProvider } from '../../services/mapProvider';
 
 // Fix leaflet default icon asset paths
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -12,7 +13,7 @@ L.Icon.Default.mergeOptions({
 });
 
 // Custom Icon Generators
-const createIncidentIcon = (tier: string, isTrapped: boolean) => {
+const createIncidentIcon = (tier: string) => {
   const colorMap: Record<string, string> = {
     CRITICAL: '#EF4444',
     HIGH: '#F97316',
@@ -90,22 +91,21 @@ export const SituationMap: React.FC<SituationMapProps> = ({
   onToggleRoad,
 }) => {
   const chennaiCenter: [number, number] = [13.0300, 80.2350];
+  const tileProvider = getActiveMapTileProvider();
 
   return (
-    <div className="w-full h-full relative overflow-hidden">
+    <div className="w-full h-full relative overflow-hidden bg-canvas">
       <MapContainer
         center={chennaiCenter}
         zoom={12}
         className="w-full h-full"
         zoomControl={false}
       >
+        {/* OpenStreetMap Standard Tile Layer */}
         <TileLayer
-          attribution='&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url={
-            import.meta.env.VITE_CARTO_API_KEY
-              ? `https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?api_key=${import.meta.env.VITE_CARTO_API_KEY}`
-              : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-          }
+          attribution={tileProvider.attribution}
+          url={tileProvider.url}
+          maxZoom={tileProvider.maxZoom}
         />
 
         {/* 1. Road Network Layer */}
@@ -146,7 +146,7 @@ export const SituationMap: React.FC<SituationMapProps> = ({
           );
         })}
 
-        {/* 2. Active Dispatch Routes Overlay */}
+        {/* 2. Active Dispatch Routes Overlay (Computed by local Dijkstra backend engine) */}
         {dispatches.map((disp) => {
           if (!disp.route_geometry || disp.route_geometry.length < 2) return null;
           const isApproved = disp.status === 'APPROVED' || disp.status === 'DISPATCHED';
@@ -165,7 +165,7 @@ export const SituationMap: React.FC<SituationMapProps> = ({
           );
         })}
 
-        {/* 3. Hospital Markers */}
+        {/* 3. Hospital & Shelter Markers */}
         {hospitals.map((hosp) => (
           <Marker
             key={hosp.id}
@@ -183,7 +183,7 @@ export const SituationMap: React.FC<SituationMapProps> = ({
           </Marker>
         ))}
 
-        {/* 4. Emergency Resource Markers */}
+        {/* 4. Emergency Fleet Markers (Ambulances ALS/BLS, Boats, NDRF) */}
         {resources.map((res) => (
           <Marker
             key={res.id}
@@ -201,12 +201,12 @@ export const SituationMap: React.FC<SituationMapProps> = ({
           </Marker>
         ))}
 
-        {/* 5. Incident Markers */}
+        {/* 5. Incident Markers (Color-coded by Priority Tier) */}
         {incidents.map((inc) => (
           <Marker
             key={inc.id}
             position={[inc.latitude, inc.longitude]}
-            icon={createIncidentIcon(inc.priority_tier, inc.mobility_status === 'TRAPPED')}
+            icon={createIncidentIcon(inc.priority_tier)}
             eventHandlers={{
               click: () => onSelectIncident(inc),
             }}

@@ -1,6 +1,5 @@
-INCIDENT_EXTRACTION_PROMPT = """
-You are an expert emergency dispatch AI triage assistant.
-Extract structured emergency parameters from the following unstructured citizen distress message or audio transcript.
+INCIDENT_EXTRACTION_PROMPT = """You are an expert emergency dispatch AI triage assistant.
+Extract structured emergency parameters from the provided citizen distress message or audio transcript.
 
 Respond ONLY with a valid JSON object matching this schema:
 {
@@ -18,20 +17,10 @@ Respond ONLY with a valid JSON object matching this schema:
   "summary": "One clear operational sentence summarizing the emergency.",
   "confidence_score": float (0.0 to 1.0)
 }
-
-Distress Text:
-"{text}"
 """
 
-ACTION_PLAN_PROMPT = """
-You are the Chief Disaster Operations Commander.
+ACTION_PLAN_PROMPT = """You are the Chief Disaster Operations Commander.
 Synthesize an executive Emergency Action Plan (EAP) briefing based on the current operational telemetry.
-
-Context:
-- Active Critical Incidents: {critical_count}
-- Dispatched Resources: {dispatched_count}
-- Evacuation Destination Hospitals: {hospital_summary}
-- Blocked Road Corridors: {blocked_roads}
 
 Generate a concise, 3-paragraph tactical order:
 1. Situation Summary (disaster scope and highest risk sectors).
