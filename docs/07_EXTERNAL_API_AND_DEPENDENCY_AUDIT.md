@@ -742,8 +742,10 @@ Every audited service is strictly categorized according to the project governanc
 
 | Variable | Provider | Required? | Used By | Purpose | Secret? | Default / Fallback |
 |---|---|---|---|---|---|---|
-| `OPENAI_API_KEY` | OpenAI | **NO** (Category B) | `apps.ai` | Enables GPT-4o-mini structured entity extraction | **YES** | `""` (Falls back to `LocalMockProvider`) |
-| `AI_PROVIDER` | Internal Config | **YES** (Category A) | `apps.ai` | Selects AI provider mode (`openai` vs `local_mock`) | NO | `"local_mock"` |
+| `OPENAI_API_KEY` | OpenRouter / OpenAI | **YES (CONFIGURED)** | `apps.ai` | Enables GPT-4o-mini structured entity extraction | **YES** | `sk-or-v1-...` |
+| `OPENAI_BASE_URL` | OpenRouter | **YES (CONFIGURED)** | `apps.ai` | Points LLM client to OpenRouter gateway | NO | `https://openrouter.ai/api/v1` |
+| `VITE_CARTO_API_KEY`| CARTO Basemaps | **YES (CONFIGURED)** | `SituationMap` | Authenticates dark-mode vector tile requests | NO (Public) | `cb1_2nqi_...` |
+| `AI_PROVIDER` | Internal Config | **YES** (Category A) | `apps.ai` | Selects AI provider mode (`openai` vs `local_mock`) | NO | `"openai"` |
 | `DATABASE_URL` | PostgreSQL | **YES** (Category A) | `config.settings` | Connects Django ORM to database | **YES** | `"postgres://localhost:5432/resq_ai"` |
 | `SECRET_KEY` | Django | **YES** (Category A) | `config.settings` | Cryptographic signing of sessions & JWT tokens | **YES** | Local dev key (Generated) |
 | `DEBUG` | Django | **YES** (Category A) | `config.settings` | Enables detailed error traces during dev | NO | `True` |
