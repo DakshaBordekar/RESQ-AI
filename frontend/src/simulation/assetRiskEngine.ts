@@ -11,6 +11,8 @@ import {
 } from './types';
 import { getDownwindVector } from '../three/utils/coordinateMath';
 
+export type { MonitoredIndustrialAsset, AssetRiskProfile, AssetRiskState };
+
 // ────────────────────────────────────────────────────────────────────────────
 // 8 MONITORED INDUSTRIAL ASSETS (Spatially aligned with SurroundingBuildings.ts)
 // ────────────────────────────────────────────────────────────────────────────
@@ -101,6 +103,8 @@ export interface AssetRiskUpdateInput {
   isWaterAttackActive: boolean;
   waterSuppressionProgress: number; // 0.0 to 1.0
   elapsedSimulationSec: number;
+  incidentOrigin?: [number, number, number]; // [ox, oy, oz]
+  fleet?: MonitoredIndustrialAsset[];
 }
 
 /**
@@ -122,6 +126,8 @@ export const evaluateAssetRiskFleet = (
     isWaterAttackActive,
     waterSuppressionProgress,
     elapsedSimulationSec,
+    incidentOrigin = [0, 0, 0],
+    fleet = MONITORED_FACILITY_ASSETS,
   } = input;
 
   const isFireActive =
@@ -131,17 +137,20 @@ export const evaluateAssetRiskFleet = (
     incidentPhase !== 'AFTERMATH';
 
   const downwindVec = getDownwindVector(windDirDeg);
+  const [ox, , oz] = incidentOrigin;
 
-  return MONITORED_FACILITY_ASSETS.map((asset) => {
+  return fleet.map((asset) => {
     const [ax, , az] = asset.worldPosition;
-    const distanceM = Math.hypot(ax, az);
+    const dx = ax - ox;
+    const dz = az - oz;
+    const distanceM = Math.hypot(dx, dz);
 
-    // Vector from fire origin (0,0) to asset
-    const assetDirX = ax / Math.max(1, distanceM);
-    const assetDirZ = az / Math.max(1, distanceM);
+    // Vector from fire origin to asset
+    const assetDirX = dx / Math.max(1, distanceM);
+    const assetDirZ = dz / Math.max(1, distanceM);
 
     // Bearing in degrees (0=North, 90=East)
-    const bearingDeg = Math.round(((Math.atan2(ax, -az) * 180) / Math.PI + 360) % 360);
+    const bearingDeg = Math.round(((Math.atan2(dx, -dz) * 180) / Math.PI + 360) % 360);
 
     // Alignment with downwind plume: dot product with downwind vector
     const windAlignment = assetDirX * downwindVec.x + assetDirZ * downwindVec.z;

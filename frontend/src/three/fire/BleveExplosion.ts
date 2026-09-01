@@ -172,21 +172,6 @@ export const createBleveExplosion = (
   sparkMesh.visible = false; // Hidden in IDLE!
   group.add(sparkMesh);
 
-  // Ground Scorch Decal
-  const scorchGeo = new THREE.CircleGeometry(48, 32);
-  const scorchMat = new THREE.MeshBasicMaterial({
-    color: 0x09090b,
-    transparent: true,
-    opacity: 0,
-    side: THREE.DoubleSide,
-    depthWrite: false,
-  });
-  const scorchMesh = new THREE.Mesh(scorchGeo, scorchMat);
-  scorchMesh.rotation.x = -Math.PI / 2;
-  scorchMesh.position.set(0, 0.4, 0);
-  scorchMesh.visible = false;
-  group.add(scorchMesh);
-
   const setPhaseInternal = (newPhase: BlevePhase) => {
     if (phase !== newPhase) {
       phase = newPhase;
@@ -234,8 +219,6 @@ export const createBleveExplosion = (
     sparkMesh.visible = false;
     sparkMat.opacity = 0;
 
-    scorchMesh.visible = false;
-    scorchMat.opacity = 0;
     flashLight.intensity = 0;
 
     const posAttr = sparkGeo.getAttribute('position') as THREE.BufferAttribute;
@@ -327,7 +310,6 @@ export const createBleveExplosion = (
       setPhaseInternal('SHOCKWAVE_PROPAGATION');
       shockwaveMesh1.visible = true;
       shockwaveMesh2.visible = true;
-      scorchMesh.visible = true;
       sparkMesh.visible = true;
 
       const waveT = (elapsed - 4.8) / 0.7;
@@ -344,7 +326,6 @@ export const createBleveExplosion = (
       }
 
       cameraShake = Math.max(0, (1 - waveT) * 0.85);
-      scorchMat.opacity = Math.min(0.85, waveT * 0.85);
     } else if (elapsed < 7.0) {
       // 6. DEBRIS & COLLAPSE AFTERMATH TRANSITION (5.5s - 7.0s)
       setPhaseInternal('DEBRIS_COLLAPSE');
@@ -364,8 +345,6 @@ export const createBleveExplosion = (
       sparkMat.opacity = Math.max(0, (1 - fadeT) * 0.8);
       flashLight.intensity = Math.max(0, (1 - fadeT) * 2.0);
       cameraShake = Math.max(0, (1 - fadeT) * 0.1);
-      scorchMat.opacity = 0.85;
-      scorchMesh.visible = true;
     } else {
       // 7. AFTERMATH (7.0s+ - Deterministic Permanent Stop)
       if (phase !== 'AFTERMATH') {
@@ -376,11 +355,9 @@ export const createBleveExplosion = (
       shockwaveMesh1.visible = false;
       shockwaveMesh2.visible = false;
       sparkMesh.visible = false;
-      flashLight.intensity = 0.8;
+      flashLight.intensity = 0;
       blastWaveRadius = maxRadius * 2.6;
       cameraShake = 0;
-      scorchMat.opacity = 0.85;
-      scorchMesh.visible = true;
     }
   };
 

@@ -117,18 +117,18 @@ export const createSkyAtmosphere = (
       sunLight.intensity = 1.9;
       sunLight.position.set(160, 95, 140);
     } else if (mode === 'NIGHT') {
-      // Tactical dark night with crisp dimensional moonlight
-      skyMat.uniforms.topColor.value.set(0x020617);
-      skyMat.uniforms.bottomColor.value.set(0x0f172a);
-      if (scene.fog) (scene.fog as THREE.FogExp2).color.set(0x090d16);
-      scene.background = new THREE.Color(0x090d16);
+      // Tactical night with crisp dimensional moonlight & distinct infrastructure visibility
+      skyMat.uniforms.topColor.value.set(0x0a1128);
+      skyMat.uniforms.bottomColor.value.set(0x1e293b);
+      if (scene.fog) (scene.fog as THREE.FogExp2).color.set(0x0f172a);
+      scene.background = new THREE.Color(0x0f172a);
 
-      ambientLight.color.set(0x64748b);
-      ambientLight.intensity = 1.0; // Clear ambient fill so building geometry is distinct
-      hemiLight.intensity = 0.85;
-      sunLight.color.set(0x93c5fd); // Cool crisp moonlight
-      sunLight.intensity = 1.5;
-      sunLight.position.set(120, 180, 120);
+      ambientLight.color.set(0x94a3b8);
+      ambientLight.intensity = 1.6; // Clear ambient fill so tanks, buildings, roads, and supports are clearly visible
+      hemiLight.intensity = 1.2;
+      sunLight.color.set(0xbae6fd); // Cool crisp moonlight key light
+      sunLight.intensity = 2.2;
+      sunLight.position.set(120, 220, 120);
     }
   };
 

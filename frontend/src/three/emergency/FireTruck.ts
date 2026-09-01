@@ -275,15 +275,17 @@ export const createFireTruck = (scene: THREE.Scene): FireTruckComponents => {
     emergencyLightsActive = true;
     travelSpeed = 0;
 
-    // Place truck at start waypoint (Perimeter Gateway)
-    group.position.copy(routeWaypoints[0]);
-    group.visible = true;
+    // Only set initial position if the truck is NOT currently visible/active in the scene
+    if (!group.visible) {
+      group.position.copy(routeWaypoints[0]);
+      group.visible = true;
 
-    // Initial heading towards the next road junction
-    const nextWp = routeWaypoints[1];
-    const dx = nextWp.x - routeWaypoints[0].x;
-    const dz = nextWp.z - routeWaypoints[0].z;
-    group.rotation.y = Math.atan2(dx, dz);
+      // Initial heading towards the first road junction
+      const nextWp = routeWaypoints[1];
+      const dx = nextWp.x - routeWaypoints[0].x;
+      const dz = nextWp.z - routeWaypoints[0].z;
+      group.rotation.y = Math.atan2(dx, dz);
+    }
   };
 
   const setEmergencyLights = (active: boolean) => {

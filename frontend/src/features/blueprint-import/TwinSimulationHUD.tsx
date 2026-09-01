@@ -1,22 +1,22 @@
 // ────────────────────────────────────────────────────────────────────────────
 // RESQ-AI DER-02 Blueprint Digital Twin Tactical Simulation HUD
-// Incident controls, AI Tactical Explainability HUD, Secondary Tank Risk, and Response Scorecard
+// Dynamic Physics Parameters, Dedicated Manual Fire Brigade Deployment Control,
+// Real-Time Explosion & Active Fire Telemetry Counters, and Scorecard Modal
 // ────────────────────────────────────────────────────────────────────────────
 
 import React, { useState, useEffect } from 'react';
-import {
-  FacilitySchema,
-  FacilityAsset,
-} from '../../simulation/blueprintTypes';
+import { FacilitySchema, FacilityAsset } from '../../simulation/blueprintTypes';
+import { FacilitySimulationResult, isHazardousExplodableAsset } from '../../simulation/hazardEngine';
 import { validateSimulationReadiness } from '../../simulation/blueprintSchema';
+import { SimulationPhase } from '../../three/blueprint/BlueprintDigitalTwinScene';
 import { WindWhatIfDrawer } from '../../three/hud/WindWhatIfDrawer';
-import { getCardinalDirection } from '../../three/utils/coordinateMath';
 import {
   Flame,
   Zap,
   Play,
   RotateCcw,
   ShieldAlert,
+  Sliders,
   Compass,
   Activity,
   CheckCircle2,
@@ -26,6 +26,8 @@ import {
   Brain,
   Award,
   ShieldCheck,
+  Truck,
+  Droplets,
   Eye,
   Info,
 } from 'lucide-react';
@@ -36,11 +38,27 @@ interface TwinSimulationHUDProps {
   activeIncidentAssetId: string | null;
   activeIncidentType: 'BLEVE' | 'POOL_FIRE' | null;
   isSimulating: boolean;
+  simulationPhase?: SimulationPhase;
+  activeFireCount?: number;
+  totalExplosionCount?: number;
+  extinguishedCount?: number;
+  fuelType: 'LPG' | 'Diesel' | 'Gasoline' | 'Crude Oil' | 'Propane' | 'Methane';
+  fillFraction: number;
+  tankDiameterM: number;
+  tankLengthM?: number;
+  tankHeightM?: number;
   windDirectionDeg: number;
   windSpeedMs: number;
+  simulationResult: FacilitySimulationResult | null;
+  onChangeFuelType: (fuel: 'LPG' | 'Diesel' | 'Gasoline' | 'Crude Oil' | 'Propane' | 'Methane') => void;
+  onChangeFillFraction: (frac: number) => void;
+  onChangeTankDiameter: (diam: number) => void;
+  onChangeTankLength?: (len: number) => void;
+  onChangeTankHeight?: (ht: number) => void;
   onChangeWindDirection: (deg: number) => void;
   onChangeWindSpeed: (speed: number) => void;
   onTriggerIncident: (assetId: string, type: 'BLEVE' | 'POOL_FIRE') => void;
+  onDeployFireBrigade?: () => void;
   onResetSimulation: () => void;
 }
 
@@ -50,68 +68,59 @@ export const TwinSimulationHUD: React.FC<TwinSimulationHUDProps> = ({
   activeIncidentAssetId,
   activeIncidentType,
   isSimulating,
+  simulationPhase = 'IDLE',
+  activeFireCount = 0,
+  totalExplosionCount = 0,
+  extinguishedCount = 0,
+  fuelType,
+  fillFraction,
+  tankDiameterM,
+  tankLengthM = 24.0,
+  tankHeightM = 14.0,
   windDirectionDeg,
   windSpeedMs,
+  simulationResult,
+  onChangeFuelType,
+  onChangeFillFraction,
+  onChangeTankDiameter,
+  onChangeTankLength,
+  onChangeTankHeight,
   onChangeWindDirection,
   onChangeWindSpeed,
   onTriggerIncident,
+  onDeployFireBrigade,
   onResetSimulation,
 }) => {
   const [selectedIncidentType, setSelectedIncidentType] = useState<'BLEVE' | 'POOL_FIRE'>('BLEVE');
   const [targetAssetId, setTargetAssetId] = useState<string>(
-    schema.assets.find((a) => a.simulationEnabled)?.id || 'TK-LPG-01'
+    selectedAssetId || schema.assets.find((a) => isHazardousExplodableAsset(a))?.id || schema.assets[0]?.id || 'TK-LPG-01'
   );
+  const [paramsDrawerOpen, setParamsDrawerOpen] = useState(false);
   const [windDrawerOpen, setWindDrawerOpen] = useState(false);
   const [explainabilityOpen, setExplainabilityOpen] = useState(true);
   const [showScorecard, setShowScorecard] = useState(false);
 
-  // Secondary Tank Risk Timers & Mitigation State
-  const [timeToFailure, setTimeToFailure] = useState(42);
-  const [secondaryFlux, setSecondaryFlux] = useState(18.4);
-  const [suppressionPhase, setSuppressionPhase] = useState<'INGRESS' | 'STAGING' | 'SUPPRESSING' | 'CONTAINED'>('INGRESS');
+  // Sync target with user asset picking
+  useEffect(() => {
+    if (selectedAssetId && schema.assets.some((a) => a.id === selectedAssetId)) {
+      setTargetAssetId(selectedAssetId);
+    }
+  }, [selectedAssetId, schema]);
 
   const readiness = validateSimulationReadiness(schema);
-  const hazardousAssets = schema.assets.filter((a) => a.simulationEnabled);
+  const hazardousAssets = schema.assets.filter((a) => isHazardousExplodableAsset(a));
+  const activeAsset = schema.assets.find((a) => a.id === targetAssetId);
 
-  const downwindHeading = windDirectionDeg;
-  const downwindCardinal = getCardinalDirection(downwindHeading);
-  const safeHeadingDeg = (windDirectionDeg + 180) % 360;
-  const safeCardinal = getCardinalDirection(safeHeadingDeg);
-
-  // Dynamic Secondary Tank Risk Simulation
+  // Show scorecard when incident resolved
   useEffect(() => {
-    if (!isSimulating) {
-      setTimeToFailure(42);
-      setSecondaryFlux(18.4);
-      setSuppressionPhase('INGRESS');
+    if (simulationPhase === 'INCIDENT_RESOLVED') {
+      const timer = setTimeout(() => setShowScorecard(true), 1200);
+      return () => clearTimeout(timer);
+    } else {
       setShowScorecard(false);
-      return;
     }
+  }, [simulationPhase]);
 
-    const t1 = setTimeout(() => setSuppressionPhase('STAGING'), 2500);
-    const t2 = setTimeout(() => {
-      setSuppressionPhase('SUPPRESSING');
-      setSecondaryFlux(6.2);
-    }, 5500);
-    const t3 = setTimeout(() => {
-      setSuppressionPhase('CONTAINED');
-      setSecondaryFlux(1.4);
-      setShowScorecard(true);
-    }, 11000);
-
-    const interval = setInterval(() => {
-      setTimeToFailure((t) => Math.max(0, t - 1));
-    }, 1000);
-
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
-      clearInterval(interval);
-    };
-  }, [isSimulating]);
-
-  // Determine Selected Gate based on Upwind Angle
   const selectedGate = schema.gates.length > 0 ? schema.gates[0] : null;
 
   return (
@@ -125,7 +134,7 @@ export const TwinSimulationHUD: React.FC<TwinSimulationHUDProps> = ({
           </div>
           <div className="min-w-0">
             <div className="text-[9px] text-cyan-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
-              <span>DER-02 BLUEPRINT TWIN SIMULATOR</span>
+              <span>DER-02 SHARED PHYSICS SIMULATOR</span>
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             </div>
             <div className="text-xs font-bold text-gray-100 truncate">
@@ -134,11 +143,12 @@ export const TwinSimulationHUD: React.FC<TwinSimulationHUDProps> = ({
           </div>
         </div>
 
-        {/* Center: Incident Target & Type Selector */}
+        {/* Center: Incident Target & Controls */}
         {!isSimulating ? (
           <div className="flex items-center gap-2 flex-wrap text-xs">
+            {/* Target Vessel Selector */}
             <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1">
-              <span className="text-[9px] text-gray-400">TARGET:</span>
+              <span className="text-[9px] text-gray-400">VESSEL:</span>
               <select
                 value={targetAssetId}
                 onChange={(e) => setTargetAssetId(e.target.value)}
@@ -152,6 +162,7 @@ export const TwinSimulationHUD: React.FC<TwinSimulationHUDProps> = ({
               </select>
             </div>
 
+            {/* Scenario Type */}
             <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5 gap-0.5 text-[10px]">
               <button
                 onClick={() => setSelectedIncidentType('BLEVE')}
@@ -175,6 +186,20 @@ export const TwinSimulationHUD: React.FC<TwinSimulationHUDProps> = ({
               </button>
             </div>
 
+            {/* Parameters Button */}
+            <button
+              onClick={() => setParamsDrawerOpen(!paramsDrawerOpen)}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors ${
+                paramsDrawerOpen
+                  ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow'
+                  : 'bg-slate-900 text-gray-300 border-slate-700 hover:text-cyan-300'
+              }`}
+            >
+              <Sliders className="w-3 h-3" />
+              <span>PHYSICS PARAMS</span>
+            </button>
+
+            {/* Trigger Button */}
             <button
               onClick={() => onTriggerIncident(targetAssetId, selectedIncidentType)}
               disabled={!readiness.ready}
@@ -186,21 +211,67 @@ export const TwinSimulationHUD: React.FC<TwinSimulationHUDProps> = ({
           </div>
         ) : (
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 text-xs text-red-400 bg-red-950/80 border border-red-800 px-3 py-1 rounded-lg font-bold animate-pulse">
-              <Flame className="w-3.5 h-3.5" />
-              <span>SIMULATION ACTIVE ({activeIncidentType} @ {activeIncidentAssetId})</span>
+            {/* Simulation Status Tag */}
+            <div className="flex items-center gap-1.5 text-xs text-red-400 bg-red-950/80 border border-red-800 px-2.5 py-1 rounded-lg font-bold">
+              <Flame className="w-3.5 h-3.5 animate-pulse" />
+              <span>
+                {simulationPhase === 'CASCADE_PROCESSING'
+                  ? 'BLAST CASCADE ACTIVE'
+                  : simulationPhase === 'CASCADE_COMPLETE'
+                  ? `CASCADE COMPLETE (${activeFireCount} ACTIVE FIRES)`
+                  : simulationPhase === 'FIRE_BRIGADE_DEPLOYING'
+                  ? 'FIRE BRIGADE INGRESSING'
+                  : simulationPhase === 'FIRE_BRIGADE_EXTINGUISHING'
+                  ? `SUPPRESSION (${extinguishedCount}/${totalExplosionCount})`
+                  : simulationPhase === 'RETURNING_TO_SAFE_POSITION'
+                  ? 'RETURNING VIA ROAD TO BASE'
+                  : 'INCIDENT RESOLVED'}
+              </span>
             </div>
+
+            {/* DEDICATED FIRE BRIGADE DEPLOYMENT BUTTON */}
+            {onDeployFireBrigade && (
+              <button
+                onClick={onDeployFireBrigade}
+                disabled={simulationPhase !== 'CASCADE_COMPLETE'}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs shadow-lg transition-all ${
+                  simulationPhase === 'CASCADE_COMPLETE'
+                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white animate-pulse ring-2 ring-emerald-400 scale-105 cursor-pointer'
+                    : simulationPhase === 'CASCADE_PROCESSING'
+                    ? 'bg-slate-800 text-gray-400 border border-slate-700 cursor-not-allowed opacity-60'
+                    : simulationPhase === 'FIRE_BRIGADE_DEPLOYING' || simulationPhase === 'FIRE_BRIGADE_EXTINGUISHING' || simulationPhase === 'RETURNING_TO_SAFE_POSITION'
+                    ? 'bg-blue-900/80 text-blue-300 border border-blue-600 cursor-default'
+                    : 'bg-emerald-950 text-emerald-300 border border-emerald-700 cursor-default'
+                }`}
+              >
+                <Truck className="w-3.5 h-3.5" />
+                <span>
+                  {simulationPhase === 'CASCADE_COMPLETE'
+                    ? `DEPLOY FIRE BRIGADE (${activeFireCount} FIRES)`
+                    : simulationPhase === 'CASCADE_PROCESSING'
+                    ? 'WAITING FOR BLAST CASCADE...'
+                    : simulationPhase === 'FIRE_BRIGADE_DEPLOYING'
+                    ? 'BRIGADE INGRESSING...'
+                    : simulationPhase === 'FIRE_BRIGADE_EXTINGUISHING'
+                    ? `EXTINGUISHING (#${extinguishedCount + 1})...`
+                    : simulationPhase === 'RETURNING_TO_SAFE_POSITION'
+                    ? 'RETURNING TO BASE...'
+                    : 'ALL FIRES SECURED'}
+                </span>
+              </button>
+            )}
+
             <button
               onClick={onResetSimulation}
               className="flex items-center gap-1 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-gray-200 rounded-lg text-xs font-bold transition-colors"
             >
               <RotateCcw className="w-3 h-3" />
-              <span>RESET SCENE</span>
+              <span>RESET</span>
             </button>
           </div>
         )}
 
-        {/* Right: Explainability & Readiness Toggle */}
+        {/* Right: Explainability Toggle */}
         <div className="flex items-center gap-1.5 text-[10px]">
           <button
             onClick={() => setExplainabilityOpen(!explainabilityOpen)}
@@ -211,12 +282,137 @@ export const TwinSimulationHUD: React.FC<TwinSimulationHUDProps> = ({
             }`}
           >
             <Brain className="w-3.5 h-3.5" />
-            <span>EXPLAINABILITY HUD</span>
+            <span>AI EXPLAINABILITY</span>
           </button>
         </div>
       </div>
 
-      {/* ── 2. FLOATING AI TACTICAL EXPLAINABILITY PANEL (TOP RIGHT) ────────── */}
+      {/* ── 2. INTERACTIVE PHYSICS PARAMETERS DRAWER (COLLAPSIBLE) ─────────── */}
+      {paramsDrawerOpen && !isSimulating && (
+        <div className="self-start mt-2 bg-slate-950/95 backdrop-blur-xl border border-cyan-500/50 p-3 rounded-xl shadow-2xl text-xs space-y-2.5 max-w-sm pointer-events-auto animate-in slide-in-from-top">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-1 text-cyan-400 font-bold text-[10px]">
+            <span className="flex items-center gap-1">
+              <Sliders className="w-3.5 h-3.5" />
+              DYNAMIC WHAT-IF PHYSICS CONTROLS
+            </span>
+            <span className="text-gray-400 text-[9px]">LIVE RECALCULATION</span>
+          </div>
+
+          <div className="space-y-2 text-[9px]">
+            {/* Substance / Fuel Type */}
+            <div>
+              <div className="flex justify-between text-gray-400 mb-0.5">
+                <span>SUBSTANCE / FUEL TYPE</span>
+                <span className="text-cyan-300 font-bold">{fuelType}</span>
+              </div>
+              <select
+                value={fuelType}
+                onChange={(e) => onChangeFuelType(e.target.value as any)}
+                className="w-full bg-slate-900 text-cyan-300 border border-slate-700 rounded px-2 py-1 font-mono text-[10px] focus:outline-none"
+              >
+                <option value="LPG">LPG (Liquefied Petroleum Gas)</option>
+                <option value="Propane">Propane (C3H8)</option>
+                <option value="Methane">Methane / LNG</option>
+                <option value="Diesel">Diesel / Heavy Fuel Oil</option>
+                <option value="Gasoline">Gasoline / Motor Spirit</option>
+                <option value="Crude Oil">Crude Oil</option>
+              </select>
+            </div>
+
+            {/* Tank Diameter Slider */}
+            <div>
+              <div className="flex justify-between text-gray-400 mb-0.5">
+                <span>VESSEL DIAMETER</span>
+                <span className="text-cyan-300 font-bold">{tankDiameterM.toFixed(1)} m</span>
+              </div>
+              <input
+                type="range"
+                min="4.0"
+                max="32.0"
+                step="0.5"
+                value={tankDiameterM}
+                onChange={(e) => onChangeTankDiameter(parseFloat(e.target.value))}
+                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+              />
+            </div>
+
+            {/* Tank Length / Depth Slider */}
+            {onChangeTankLength && activeAsset?.type.includes('BULLET') && (
+              <div>
+                <div className="flex justify-between text-gray-400 mb-0.5">
+                  <span>VESSEL LENGTH</span>
+                  <span className="text-cyan-300 font-bold">{tankLengthM.toFixed(1)} m</span>
+                </div>
+                <input
+                  type="range"
+                  min="8.0"
+                  max="45.0"
+                  step="1.0"
+                  value={tankLengthM}
+                  onChange={(e) => onChangeTankLength(parseFloat(e.target.value))}
+                  className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                />
+              </div>
+            )}
+
+            {/* Tank Height Slider */}
+            {onChangeTankHeight && activeAsset?.type === 'STORAGE_TANK' && (
+              <div>
+                <div className="flex justify-between text-gray-400 mb-0.5">
+                  <span>VESSEL HEIGHT</span>
+                  <span className="text-cyan-300 font-bold">{tankHeightM.toFixed(1)} m</span>
+                </div>
+                <input
+                  type="range"
+                  min="6.0"
+                  max="28.0"
+                  step="0.5"
+                  value={tankHeightM}
+                  onChange={(e) => onChangeTankHeight(parseFloat(e.target.value))}
+                  className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                />
+              </div>
+            )}
+
+            {/* Fill Fraction Slider */}
+            <div>
+              <div className="flex justify-between text-gray-400 mb-0.5">
+                <span>FILL FRACTION</span>
+                <span className="text-cyan-300 font-bold">{Math.round(fillFraction * 100)}%</span>
+              </div>
+              <input
+                type="range"
+                min="0.10"
+                max="0.98"
+                step="0.02"
+                value={fillFraction}
+                onChange={(e) => onChangeFillFraction(parseFloat(e.target.value))}
+                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+              />
+            </div>
+
+            {/* Physics Metrics Preview */}
+            {simulationResult && (
+              <div className="bg-slate-900/90 p-2 rounded-lg border border-slate-800 space-y-1 text-[8px]">
+                <div className="text-cyan-400 font-bold flex justify-between">
+                  <span>CALCULATED THREAT ENVELOPE:</span>
+                  <span className="text-emerald-400">CCPS 2010</span>
+                </div>
+                <div className="grid grid-cols-2 gap-1 text-gray-300">
+                  <div>Fireball: <strong>{simulationResult.physicsMetrics.fireballRadiusM.toFixed(1)}m</strong></div>
+                  <div>Lethal Zone: <strong>{simulationResult.physicsMetrics.lethalRadiusM}m</strong></div>
+                  <div>TNT Equiv: <strong>{simulationResult.physicsMetrics.wTntEquivalentKg} kg</strong></div>
+                  <div>Energy: <strong>{simulationResult.physicsMetrics.totalEnergyGJ} GJ</strong></div>
+                  <div>Stored Mass: <strong>{simulationResult.threatParams.mass_kg.toLocaleString()} kg</strong></div>
+                  <div>Safe Corridor: <strong>{simulationResult.physicsMetrics.safeHeadingDeg}° ({simulationResult.physicsMetrics.safeCardinal})</strong></div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── 3. FLOATING AI TACTICAL EXPLAINABILITY PANEL (TOP RIGHT) ────────── */}
       {explainabilityOpen && (
         <div className="self-end mt-2 bg-slate-950/95 backdrop-blur-xl border border-cyan-500/40 p-3 rounded-xl shadow-2xl text-xs space-y-2 max-w-sm pointer-events-auto animate-in slide-in-from-right">
           <div className="flex items-center justify-between border-b border-slate-800 pb-1 text-cyan-400 font-bold text-[10px]">
@@ -234,7 +430,7 @@ export const TwinSimulationHUD: React.FC<TwinSimulationHUDProps> = ({
                 <span className="text-red-400 uppercase">{activeIncidentType || selectedIncidentType}</span>
               </div>
               <p className="text-gray-400 text-[8px] leading-relaxed">
-                Wind is propagating downwind toward <strong className="text-amber-300">{Math.round(downwindHeading)}° ({downwindCardinal})</strong> at {windSpeedMs.toFixed(1)} m/s. Safe emergency ingress is routed through the reciprocal upwind corridor at <strong className="text-emerald-400">{Math.round(safeHeadingDeg)}° ({safeCardinal})</strong> with 0 lethal-zone crossings.
+                Wind is propagating downwind toward <strong className="text-amber-300">{Math.round(windDirectionDeg)}°</strong> at {windSpeedMs.toFixed(1)} m/s. Safe emergency ingress is routed through the reciprocal upwind corridor at <strong className="text-emerald-400">{Math.round((windDirectionDeg + 180) % 360)}°</strong> with 0 lethal-zone crossings.
               </p>
             </div>
 
@@ -249,10 +445,10 @@ export const TwinSimulationHUD: React.FC<TwinSimulationHUDProps> = ({
                   ✓ <strong>SELECTED: {selectedGate?.name || 'NORTH EMERGENCY GATE'}</strong> — Shortest safe upwind route with 0 lethal zone crossings.
                 </div>
                 <div className="text-red-400/80">
-                  ✗ <strong>REJECTED: WEST GATE</strong> — Route intersects thermal zone 1 and crosses predicted downwind hazard axis.
+                  ✗ <strong>REJECTED: WEST GATE</strong> — Intersects 37.5 kW/m² lethal zone along downwind thermal axis.
                 </div>
                 <div className="text-red-400/80">
-                  ✗ <strong>REJECTED: SECONDARY GATE</strong> — Requires crossing convective smoke & blast overpressure boundary.
+                  ✗ <strong>REJECTED: SOUTH GATE</strong> — Route crosses convective smoke plume and overpressure zone.
                 </div>
               </div>
             </div>
@@ -260,46 +456,56 @@ export const TwinSimulationHUD: React.FC<TwinSimulationHUDProps> = ({
         </div>
       )}
 
-      {/* ── 3. BOTTOM TELEMETRY DOCKS & SECONDARY TANK RISK ─────────────────── */}
+      {/* ── 4. BOTTOM TELEMETRY DOCKS & CASCADE TIMELINE ROSTER ─────────────── */}
       <div className="flex items-end justify-between gap-3 pointer-events-auto">
-        {/* Bottom Left: Cascading Domino Secondary Tank Risk & Telemetry */}
-        {isSimulating && (
+        {/* Bottom Left: Live Explosion & Active Fire Roster */}
+        {simulationResult && simulationResult.cascadeChain.length > 0 && (
           <div className="bg-slate-950/95 backdrop-blur-xl border border-red-500/50 p-2.5 rounded-xl shadow-2xl text-xs space-y-2 max-w-sm animate-in fade-in">
             <div className="flex items-center justify-between text-red-400 font-bold text-[10px] border-b border-red-950 pb-0.5">
               <span className="flex items-center gap-1">
                 <ShieldAlert className="w-3.5 h-3.5 text-red-400 animate-pulse" />
-                SECONDARY TANK DOMINO RISK
+                BLAST CASCADE ROSTER ({simulationResult.cascadeChain.length} VESSELS)
               </span>
-              <span className={`text-[8px] px-1 py-0.2 rounded font-bold uppercase ${
-                suppressionPhase === 'CONTAINED'
-                  ? 'bg-emerald-950 text-emerald-300 border border-emerald-700'
-                  : 'bg-red-950 text-red-300 border border-red-700 animate-pulse'
-              }`}>
-                {suppressionPhase}
+              <span className="text-[8px] px-1.5 py-0.2 rounded font-bold uppercase bg-red-950 text-red-300 border border-red-700">
+                {simulationPhase}
               </span>
             </div>
 
-            <div className="grid grid-cols-2 gap-1.5 text-[9px]">
-              <div className="bg-slate-900/80 p-1.5 rounded border border-slate-800">
-                <div className="text-gray-500 text-[8px]">MONITORED VESSEL</div>
-                <strong className="text-cyan-300">TK-LPG-02 (ADJACENT)</strong>
+            <div className="grid grid-cols-3 gap-1 text-[8px] text-center font-bold">
+              <div className="bg-slate-900 p-1 rounded border border-slate-800">
+                <div className="text-gray-400 text-[7px]">EXPLOSIONS</div>
+                <div className="text-cyan-300">{simulationResult.cascadeChain.length}</div>
               </div>
-              <div className="bg-slate-900/80 p-1.5 rounded border border-slate-800">
-                <div className="text-gray-500 text-[8px]">THERMAL FLUX</div>
-                <strong className={secondaryFlux > 10 ? 'text-red-400' : 'text-emerald-400'}>
-                  {secondaryFlux.toFixed(1)} kW/m²
-                </strong>
+              <div className="bg-slate-900 p-1 rounded border border-slate-800">
+                <div className="text-gray-400 text-[7px]">ACTIVE FIRES</div>
+                <div className={activeFireCount > 0 ? 'text-red-400 animate-pulse' : 'text-emerald-400'}>
+                  {activeFireCount}
+                </div>
               </div>
-              <div className="bg-slate-900/80 p-1.5 rounded border border-slate-800">
-                <div className="text-gray-500 text-[8px]">TIME TO FAILURE</div>
-                <strong className={timeToFailure < 20 ? 'text-red-400' : 'text-amber-400'}>
-                  {timeToFailure > 0 ? `${timeToFailure}s (COUNTDOWN)` : 'MITIGATED'}
-                </strong>
+              <div className="bg-slate-900 p-1 rounded border border-slate-800">
+                <div className="text-gray-400 text-[7px]">EXTINGUISHED</div>
+                <div className="text-emerald-300">{extinguishedCount}/{simulationResult.cascadeChain.length}</div>
               </div>
-              <div className="bg-slate-900/80 p-1.5 rounded border border-slate-800">
-                <div className="text-gray-500 text-[8px]">COOLING MONITOR</div>
-                <strong className="text-blue-400">4,500 L/MIN QUENCH</strong>
-              </div>
+            </div>
+
+            <div className="space-y-1 max-h-24 overflow-y-auto text-[8px]">
+              {simulationResult.cascadeChain.map((node, i) => (
+                <div
+                  key={`hud-node-${node.assetId}-${i}`}
+                  className="bg-slate-900/80 p-1 rounded border border-slate-800 flex items-center justify-between"
+                >
+                  <div className="truncate max-w-[170px]">
+                    <span className="font-bold text-cyan-300">
+                      {i === 0 ? '★ ' : `↳ #${i} `}
+                      {node.assetName}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-amber-400 font-bold">R={node.blastRadiusM}m</span>
+                    <span className="text-gray-400 text-[7px]">t={node.triggerTimeSec.toFixed(0)}s</span>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -321,7 +527,7 @@ export const TwinSimulationHUD: React.FC<TwinSimulationHUDProps> = ({
         </div>
       </div>
 
-      {/* ── 4. FINAL TACTICAL RESPONSE SCORECARD MODAL ─────────────────────── */}
+      {/* ── 5. FINAL TACTICAL RESPONSE SCORECARD MODAL ─────────────────────── */}
       {showScorecard && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-[2000] pointer-events-auto animate-in zoom-in-95">
           <div className="bg-slate-900 border-2 border-emerald-500 p-4 rounded-2xl shadow-2xl max-w-md w-full font-mono space-y-3">
@@ -346,8 +552,8 @@ export const TwinSimulationHUD: React.FC<TwinSimulationHUDProps> = ({
                 <strong className="text-emerald-300 text-xs">0 (PERFECT)</strong>
               </div>
               <div className="bg-slate-950 p-2 rounded-lg border border-slate-800">
-                <div className="text-gray-500">SECONDARY ASSETS SAVED</div>
-                <strong className="text-cyan-300 text-xs">3 VESSELS PROTECTED</strong>
+                <div className="text-gray-500">FIRES EXTINGUISHED</div>
+                <strong className="text-cyan-300 text-xs">{extinguishedCount}/{totalExplosionCount || 1} SECURED</strong>
               </div>
               <div className="bg-slate-950 p-2 rounded-lg border border-slate-800">
                 <div className="text-gray-500">SUPPRESSION STATUS</div>
@@ -356,7 +562,7 @@ export const TwinSimulationHUD: React.FC<TwinSimulationHUDProps> = ({
             </div>
 
             <p className="text-[9px] text-gray-300 bg-slate-950/80 p-2 rounded border border-slate-800 leading-relaxed">
-              Responders successfully navigated via the verified blueprint road graph, ingress achieved from the optimal upwind gate with zero lethal zone crossings, and high-pressure water monitors arrested cascading domino tank failure.
+              Responders successfully entered from the optimal upwind gate with 0 lethal zone crossings. High-pressure monitors systematically extinguished all active fires one by one, securing the entire industrial facility.
             </p>
 
             <button

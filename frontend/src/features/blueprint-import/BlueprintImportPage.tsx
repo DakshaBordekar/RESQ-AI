@@ -1,9 +1,10 @@
 // ────────────────────────────────────────────────────────────────────────────
 // RESQ-AI DER-02 Blueprint-to-Digital-Twin Master Page
 // 5-Stage Pipeline: Upload -> Analyze -> Review -> Generate -> Simulate
+// Single Shared Physics Simulation Engine driving both 3D Twin & 2D Blueprint
 // ────────────────────────────────────────────────────────────────────────────
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   FacilitySchema,
   FacilityAsset,
@@ -16,6 +17,7 @@ import {
   VisionAnalysisProgress,
 } from '../../services/blueprintVisionService';
 import { loadDemoBlueprintTemplate } from '../../simulation/blueprintDemoTemplates';
+import { runFacilityHazardSimulation, isHazardousExplodableAsset } from '../../simulation/hazardEngine';
 import { BlueprintUploader } from './BlueprintUploader';
 import { BlueprintOverlayCanvas } from './BlueprintOverlayCanvas';
 import { DetectionReviewPanel } from './DetectionReviewPanel';
@@ -35,6 +37,8 @@ import {
   Box,
   Flame,
   Activity,
+  Columns,
+  Maximize2,
 } from 'lucide-react';
 
 interface BlueprintImportPageProps {
@@ -70,15 +74,76 @@ export const BlueprintImportPage: React.FC<BlueprintImportPageProps> = ({
     confidence: 0.94,
   });
 
-  // Simulation State
+  // Master Simulation State
   const [activeIncidentAssetId, setActiveIncidentAssetId] = useState<string | null>(null);
   const [activeIncidentType, setActiveIncidentType] = useState<'BLEVE' | 'POOL_FIRE' | null>(null);
   const [isSimulating, setIsSimulating] = useState(false);
-  const [windDirectionDeg, setWindDirectionDeg] = useState(135);
-  const [windSpeedMs, setWindSpeedMs] = useState(8.5);
+  const [simulationPhase, setSimulationPhase] = useState<
+    | 'IDLE'
+    | 'PRIMARY_EXPLOSION'
+    | 'CASCADE_PROCESSING'
+    | 'CASCADE_COMPLETE'
+    | 'FIRE_BRIGADE_DEPLOYING'
+    | 'FIRE_BRIGADE_EXTINGUISHING'
+    | 'RETURNING_TO_SAFE_POSITION'
+    | 'INCIDENT_RESOLVED'
+  >('IDLE');
+  const [activeFireCount, setActiveFireCount] = useState<number>(0);
+  const [totalExplosionCount, setTotalExplosionCount] = useState<number>(0);
+  const [extinguishedCount, setExtinguishedCount] = useState<number>(0);
+  const [deployBrigadeTrigger, setDeployBrigadeTrigger] = useState<number>(0);
+  const [fuelType, setFuelType] = useState<'LPG' | 'Diesel' | 'Gasoline' | 'Crude Oil' | 'Propane' | 'Methane'>('LPG');
+  const [fillFraction, setFillFraction] = useState<number>(0.85);
+  const [tankDiameterM, setTankDiameterM] = useState<number>(14.0);
+  const [tankLengthM, setTankLengthM] = useState<number>(24.0);
+  const [tankHeightM, setTankHeightM] = useState<number>(14.0);
+  const [windDirectionDeg, setWindDirectionDeg] = useState<number>(135);
+  const [windSpeedMs, setWindSpeedMs] = useState<number>(8.5);
 
-  // View Layout Mode in Review / Twin Stage (Split vs Full)
-  const [viewLayout, setViewLayout] = useState<'SPLIT' | 'BLUEPRINT_ONLY' | 'TWIN_ONLY'>('SPLIT');
+  // View Layout in Simulation Stage
+  const [simulationViewMode, setSimulationViewMode] = useState<'SPLIT' | '3D_TWIN' | '2D_BLUEPRINT'>('SPLIT');
+
+  // Compute Master Simulation Result via Shared Engine (Pure, Deterministic, Reactive)
+  const simulationResult = useMemo(() => {
+    if (!schema || schema.assets.length === 0) return null;
+
+    const targetId =
+      activeIncidentAssetId ||
+      selectedAsset?.id ||
+      schema.assets.find((a) => isHazardousExplodableAsset(a))?.id ||
+      schema.assets[0]?.id ||
+      'TK-LPG-01';
+
+    return runFacilityHazardSimulation({
+      incidentAssetId: targetId,
+      scenario: activeIncidentType || 'BLEVE',
+      fuelType,
+      tankDiameterM,
+      tankLengthM,
+      tankHeightM,
+      fillFraction,
+      windSpeedMs,
+      windDirectionDeg,
+      facilityAssets: schema.assets,
+      transformConfig: {
+        blueprintWidthPx: schema.metadata.blueprintWidthPx,
+        blueprintHeightPx: schema.metadata.blueprintHeightPx,
+        pixelsPerMeter: schema.metadata.pixelsPerMeter,
+      },
+    });
+  }, [
+    schema,
+    activeIncidentAssetId,
+    selectedAsset,
+    activeIncidentType,
+    fuelType,
+    tankDiameterM,
+    tankLengthM,
+    tankHeightM,
+    fillFraction,
+    windSpeedMs,
+    windDirectionDeg,
+  ]);
 
   // Handle File Selected
   const handleFileSelected = async (fileOrUrl: File | string, templateId?: string) => {
@@ -143,6 +208,33 @@ export const BlueprintImportPage: React.FC<BlueprintImportPageProps> = ({
     setActiveIncidentAssetId(assetId);
     setActiveIncidentType(type);
     setIsSimulating(true);
+    setSimulationPhase('PRIMARY_EXPLOSION');
+  };
+
+  // Deploy Fire Brigade (User-triggered Action)
+  const handleDeployFireBrigade = () => {
+    setDeployBrigadeTrigger((prev) => prev + 1);
+  };
+
+  // Simulation Phase & Counts update from 3D scene
+  const handlePhaseChange = (
+    phase:
+      | 'IDLE'
+      | 'PRIMARY_EXPLOSION'
+      | 'CASCADE_PROCESSING'
+      | 'CASCADE_COMPLETE'
+      | 'FIRE_BRIGADE_DEPLOYING'
+      | 'FIRE_BRIGADE_EXTINGUISHING'
+      | 'RETURNING_TO_SAFE_POSITION'
+      | 'INCIDENT_RESOLVED',
+    activeFires: number,
+    totalExplosions: number,
+    extinguished: number
+  ) => {
+    setSimulationPhase(phase);
+    setActiveFireCount(activeFires);
+    setTotalExplosionCount(totalExplosions);
+    setExtinguishedCount(extinguished);
   };
 
   // Reset Simulation Scene
@@ -150,6 +242,10 @@ export const BlueprintImportPage: React.FC<BlueprintImportPageProps> = ({
     setIsSimulating(false);
     setActiveIncidentAssetId(null);
     setActiveIncidentType(null);
+    setSimulationPhase('IDLE');
+    setActiveFireCount(0);
+    setTotalExplosionCount(0);
+    setExtinguishedCount(0);
   };
 
   // Full Reset to Upload
@@ -161,6 +257,10 @@ export const BlueprintImportPage: React.FC<BlueprintImportPageProps> = ({
     setIsSimulating(false);
     setActiveIncidentAssetId(null);
     setActiveIncidentType(null);
+    setSimulationPhase('IDLE');
+    setActiveFireCount(0);
+    setTotalExplosionCount(0);
+    setExtinguishedCount(0);
   };
 
   return (
@@ -223,15 +323,47 @@ export const BlueprintImportPage: React.FC<BlueprintImportPageProps> = ({
           })}
         </div>
 
-        {/* Right: Reset & Navigation Actions */}
+        {/* Right: View Mode Toggle & Actions */}
         <div className="flex items-center gap-2">
+          {currentStage === 'SIMULATE' && (
+            <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5 text-[9px]">
+              <button
+                onClick={() => setSimulationViewMode('SPLIT')}
+                className={`px-2 py-1 rounded font-bold transition-colors ${
+                  simulationViewMode === 'SPLIT' ? 'bg-cyan-500 text-slate-950' : 'text-gray-400 hover:text-gray-200'
+                }`}
+                title="Split Screen: 2D Blueprint + 3D Twin"
+              >
+                SPLIT VIEW
+              </button>
+              <button
+                onClick={() => setSimulationViewMode('3D_TWIN')}
+                className={`px-2 py-1 rounded font-bold transition-colors ${
+                  simulationViewMode === '3D_TWIN' ? 'bg-cyan-500 text-slate-950' : 'text-gray-400 hover:text-gray-200'
+                }`}
+                title="Full 3D Digital Twin"
+              >
+                3D TWIN
+              </button>
+              <button
+                onClick={() => setSimulationViewMode('2D_BLUEPRINT')}
+                className={`px-2 py-1 rounded font-bold transition-colors ${
+                  simulationViewMode === '2D_BLUEPRINT' ? 'bg-cyan-500 text-slate-950' : 'text-gray-400 hover:text-gray-200'
+                }`}
+                title="Full 2D Blueprint"
+              >
+                2D BLUEPRINT
+              </button>
+            </div>
+          )}
+
           {currentStage !== 'UPLOAD' && (
             <button
               onClick={handleResetAll}
               className="flex items-center gap-1 px-2.5 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded-lg text-[10px] text-gray-300 font-bold transition-colors"
             >
               <RotateCcw className="w-3 h-3" />
-              <span>RESET BLUEPRINT</span>
+              <span>RESET</span>
             </button>
           )}
 
@@ -291,6 +423,8 @@ export const BlueprintImportPage: React.FC<BlueprintImportPageProps> = ({
                 schema={schema}
                 selectedAssetId={selectedAsset?.id || null}
                 onSelectAsset={setSelectedAsset}
+                simulationResult={simulationResult}
+                isSimulating={false}
               />
             </div>
 
@@ -333,33 +467,98 @@ export const BlueprintImportPage: React.FC<BlueprintImportPageProps> = ({
           </div>
         )}
 
-        {/* STAGE 5: INTERACTIVE 3D DIGITAL TWIN & SIMULATION */}
+        {/* STAGE 5: INTERACTIVE SHARED PHYSICS TACTICAL SIMULATION */}
         {currentStage === 'SIMULATE' && schema && (
           <div className="relative w-full h-full">
-            {/* 3D Scene Viewport */}
-            <BlueprintDigitalTwinScene
-              schema={schema}
-              selectedAssetId={selectedAsset?.id || null}
-              onSelectAsset={setSelectedAsset}
-              activeIncidentAssetId={activeIncidentAssetId}
-              activeIncidentType={activeIncidentType}
-              isSimulating={isSimulating}
-              windDirectionDeg={windDirectionDeg}
-              windSpeedMs={windSpeedMs}
-            />
+            {/* Split Screen Layout */}
+            {simulationViewMode === 'SPLIT' && blueprintImageUrl ? (
+              <div className="w-full h-full grid grid-cols-1 lg:grid-cols-12 gap-3">
+                {/* Left 5 Columns: 2D Blueprint with Live Shared Hazard Overlay */}
+                <div className="lg:col-span-5 h-full">
+                  <BlueprintOverlayCanvas
+                    blueprintImageUrl={blueprintImageUrl}
+                    schema={schema}
+                    selectedAssetId={selectedAsset?.id || null}
+                    onSelectAsset={setSelectedAsset}
+                    simulationResult={simulationResult}
+                    isSimulating={isSimulating}
+                  />
+                </div>
 
-            {/* Simulation Tactical Overlay HUD */}
+                {/* Right 7 Columns: 3D Digital Twin Scene */}
+                <div className="lg:col-span-7 h-full relative rounded-xl overflow-hidden border border-slate-800">
+                  <BlueprintDigitalTwinScene
+                    schema={schema}
+                    selectedAssetId={selectedAsset?.id || null}
+                    onSelectAsset={setSelectedAsset}
+                    activeIncidentAssetId={activeIncidentAssetId}
+                    activeIncidentType={activeIncidentType}
+                    isSimulating={isSimulating}
+                    deployBrigadeTrigger={deployBrigadeTrigger}
+                    windDirectionDeg={windDirectionDeg}
+                    windSpeedMs={windSpeedMs}
+                    simulationResult={simulationResult}
+                    onPhaseChange={handlePhaseChange}
+                  />
+                </div>
+              </div>
+            ) : simulationViewMode === '2D_BLUEPRINT' && blueprintImageUrl ? (
+              <div className="w-full h-full">
+                <BlueprintOverlayCanvas
+                  blueprintImageUrl={blueprintImageUrl}
+                  schema={schema}
+                  selectedAssetId={selectedAsset?.id || null}
+                  onSelectAsset={setSelectedAsset}
+                  simulationResult={simulationResult}
+                  isSimulating={isSimulating}
+                />
+              </div>
+            ) : (
+              <div className="w-full h-full relative rounded-xl overflow-hidden border border-slate-800">
+                <BlueprintDigitalTwinScene
+                  schema={schema}
+                  selectedAssetId={selectedAsset?.id || null}
+                  onSelectAsset={setSelectedAsset}
+                  activeIncidentAssetId={activeIncidentAssetId}
+                  activeIncidentType={activeIncidentType}
+                  isSimulating={isSimulating}
+                  deployBrigadeTrigger={deployBrigadeTrigger}
+                  windDirectionDeg={windDirectionDeg}
+                  windSpeedMs={windSpeedMs}
+                  simulationResult={simulationResult}
+                  onPhaseChange={handlePhaseChange}
+                />
+              </div>
+            )}
+
+            {/* Tactical Simulation HUD & What-If Parameter Controls */}
             <TwinSimulationHUD
               schema={schema}
               selectedAssetId={selectedAsset?.id || null}
               activeIncidentAssetId={activeIncidentAssetId}
               activeIncidentType={activeIncidentType}
               isSimulating={isSimulating}
+              simulationPhase={simulationPhase}
+              activeFireCount={activeFireCount}
+              totalExplosionCount={totalExplosionCount}
+              extinguishedCount={extinguishedCount}
+              fuelType={fuelType}
+              fillFraction={fillFraction}
+              tankDiameterM={tankDiameterM}
+              tankLengthM={tankLengthM}
+              tankHeightM={tankHeightM}
               windDirectionDeg={windDirectionDeg}
               windSpeedMs={windSpeedMs}
+              simulationResult={simulationResult}
+              onChangeFuelType={setFuelType}
+              onChangeFillFraction={setFillFraction}
+              onChangeTankDiameter={setTankDiameterM}
+              onChangeTankLength={setTankLengthM}
+              onChangeTankHeight={setTankHeightM}
               onChangeWindDirection={setWindDirectionDeg}
               onChangeWindSpeed={setWindSpeedMs}
               onTriggerIncident={handleTriggerIncident}
+              onDeployFireBrigade={handleDeployFireBrigade}
               onResetSimulation={handleResetSimulation}
             />
           </div>
