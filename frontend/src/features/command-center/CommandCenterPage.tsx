@@ -22,7 +22,12 @@ import {
   Activity,
   Maximize2,
   Minimize2,
+  Users,
 } from 'lucide-react';
+
+interface CommandCenterPageProps {
+  onNavigateToMission?: () => void;
+}
 
 // ── Default facility presets ───────────────────────────────────────────────
 const FACILITY_A_DEFAULTS: Partial<ThreatCalculateParams> = {
@@ -62,7 +67,9 @@ const INITIAL_PARAMS: ThreatCalculateParams = {
   longitude: 80.2350,
 };
 
-export const CommandCenterPage: React.FC = () => {
+export const CommandCenterPage: React.FC<CommandCenterPageProps> = ({
+  onNavigateToMission,
+}) => {
   const [params, setParams] = useState<ThreatCalculateParams>(INITIAL_PARAMS);
   const [threatData, setThreatData] = useState<ThreatResponse | null>(null);
   const [viewMode, setViewMode] = useState<'2D_MAP' | '3D_DIGITAL_TWIN'>('2D_MAP');
@@ -280,6 +287,18 @@ export const CommandCenterPage: React.FC = () => {
               <Download className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">{exporting ? 'Exporting…' : 'Export PNG'}</span>
             </button>
+
+            {/* Mission Mode Switcher */}
+            {onNavigateToMission && (
+              <button
+                onClick={onNavigateToMission}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-red-950 hover:bg-red-900 border border-red-500/60 text-red-300 rounded-lg text-xs font-bold transition-all shadow hover:scale-105"
+                title="Launch Mission Mode & Casualty Rescue Simulator"
+              >
+                <Users className="w-3.5 h-3.5 text-red-400 animate-pulse" />
+                <span>MISSION MODE</span>
+              </button>
+            )}
           </div>
         </header>
       )}
