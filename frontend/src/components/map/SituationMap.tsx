@@ -77,6 +77,8 @@ interface SituationMapProps {
   dispatches: Dispatch[];
   selectedIncidentId?: string;
   onSelectIncident: (inc: Incident) => void;
+  onSelectHospital?: (hosp: Hospital) => void;
+  onSelectResource?: (res: Resource) => void;
   onToggleRoad: (roadId: string) => void;
 }
 
@@ -88,6 +90,8 @@ export const SituationMap: React.FC<SituationMapProps> = ({
   dispatches,
   selectedIncidentId,
   onSelectIncident,
+  onSelectHospital,
+  onSelectResource,
   onToggleRoad,
 }) => {
   const chennaiCenter: [number, number] = [13.0300, 80.2350];
@@ -171,6 +175,9 @@ export const SituationMap: React.FC<SituationMapProps> = ({
             key={hosp.id}
             position={[hosp.latitude, hosp.longitude]}
             icon={createHospitalIcon(hosp.available_beds, hosp.status)}
+            eventHandlers={{
+              click: () => onSelectHospital && onSelectHospital(hosp),
+            }}
           >
             <Popup>
               <div className="p-1 text-xs">
@@ -178,6 +185,12 @@ export const SituationMap: React.FC<SituationMapProps> = ({
                 <div className="text-gray-200 mt-1">Available Beds: <strong>{hosp.available_beds}/{hosp.total_beds}</strong></div>
                 <div className="text-gray-200">ICU Vacancy: <strong>{hosp.available_icu}/{hosp.total_icu}</strong></div>
                 <div className="text-gray-400 mt-0.5">Status: {hosp.status_display}</div>
+                <button
+                  onClick={() => onSelectHospital && onSelectHospital(hosp)}
+                  className="mt-2 w-full py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[11px] font-bold"
+                >
+                  🥽 Dive into 3D Digital Twin
+                </button>
               </div>
             </Popup>
           </Marker>
@@ -189,6 +202,9 @@ export const SituationMap: React.FC<SituationMapProps> = ({
             key={res.id}
             position={[res.latitude, res.longitude]}
             icon={createResourceIcon(res.type, res.status)}
+            eventHandlers={{
+              click: () => onSelectResource && onSelectResource(res),
+            }}
           >
             <Popup>
               <div className="p-1 text-xs">
@@ -196,6 +212,12 @@ export const SituationMap: React.FC<SituationMapProps> = ({
                 <div className="text-gray-200 mt-0.5">Type: {res.type_display}</div>
                 <div className="text-gray-200">Status: <span className="font-bold">{res.status_display}</span></div>
                 <div className="text-gray-400 text-[10px] mt-1">Capabilities: {res.capabilities.join(', ')}</div>
+                <button
+                  onClick={() => onSelectResource && onSelectResource(res)}
+                  className="mt-2 w-full py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[11px] font-bold"
+                >
+                  🥽 Follow Vehicle in 3D
+                </button>
               </div>
             </Popup>
           </Marker>
@@ -220,9 +242,9 @@ export const SituationMap: React.FC<SituationMapProps> = ({
                 <div className="text-gray-400 text-[10px] mt-0.5">Mobility: {inc.mobility_status} | Urgency: {inc.urgency}</div>
                 <button
                   onClick={() => onSelectIncident(inc)}
-                  className="mt-2 w-full py-1 bg-blue-600 text-white rounded text-[11px] font-semibold"
+                  className="mt-2 w-full py-1 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold rounded text-[11px] shadow"
                 >
-                  View in Action Hub
+                  🥽 Dive into 3D Digital Twin
                 </button>
               </div>
             </Popup>

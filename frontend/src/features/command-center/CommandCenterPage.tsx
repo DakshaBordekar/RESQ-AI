@@ -1,229 +1,155 @@
 import React, { useState, useEffect } from 'react';
-import {
-  getIncidents,
-  getResources,
-  getHospitals,
-  getRoadSegments,
-  getDispatches,
-  getActiveScenario,
-  getAnalyticsSummary,
-  getWeatherTelemetry,
-  runOptimization,
-  approveDispatch,
-  toggleRoadBlockage,
-  injectSimulationEvent,
-  resetSimulation,
-} from '../../services/api';
-import { Incident, Resource, Hospital, RoadSegment, Dispatch, SimulationScenario, AnalyticsSummary, WeatherTelemetry } from '../../types';
-import { Header } from '../../components/layout/Header';
-import { IncidentQueuePanel } from './IncidentQueuePanel';
-import { SituationMap } from '../../components/map/SituationMap';
-import { ExplainabilityCard } from './ExplainabilityCard';
-import { FleetTelemetryDock } from './FleetTelemetryDock';
-import { IncidentIntakeModal } from '../intake/IncidentIntakeModal';
-import { ActionPlanViewer } from '../action-plan/ActionPlanViewer';
+import { ThreatControlDock } from '../../components/threat/ThreatControlDock';
+import { ThreatMap2D } from '../../components/threat/ThreatMap2D';
+import { ThreatDigitalTwin3D } from '../../components/threat/ThreatDigitalTwin3D';
+import { ThreatTelemetryPanel } from '../../components/threat/ThreatTelemetryPanel';
+import { calculateThreatZone, ThreatCalculateParams, ThreatResponse } from '../../services/threatApi';
+import { ShieldAlert, Compass, Eye, Map, Box } from 'lucide-react';
 
 export const CommandCenterPage: React.FC = () => {
-  // Master State
-  const [incidents, setIncidents] = useState<Incident[]>([]);
-  const [resources, setResources] = useState<Resource[]>([]);
-  const [hospitals, setHospitals] = useState<Hospital[]>([]);
-  const [roadSegments, setRoadSegments] = useState<RoadSegment[]>([]);
-  const [dispatches, setDispatches] = useState<Dispatch[]>([]);
-  const [scenario, setScenario] = useState<SimulationScenario | undefined>();
-  const [analytics, setAnalytics] = useState<AnalyticsSummary | undefined>();
-  const [weather, setWeather] = useState<WeatherTelemetry | undefined>();
+  const [params, setParams] = useState<ThreatCalculateParams>({
+    facility_type: 'FACILITY_A_LPG',
+    latitude: 13.0300,
+    longitude: 80.2350,
+    mass_kg: 40000,
+    pool_diameter_m: 30,
+    fuel_type: 'LPG',
+    wind_speed_ms: 8.5,
+    wind_direction_deg: 135,
+  });
 
-  // Selected Item State
-  const [selectedIncident, setSelectedIncident] = useState<Incident | undefined>();
-  const [isOptimizing, setIsOptimizing] = useState(false);
-
-  // Modals State
-  const [isIntakeOpen, setIsIntakeOpen] = useState(false);
-  const [isActionPlanOpen, setIsActionPlanOpen] = useState(false);
-
-  // Fetch all live data
-  const fetchData = async () => {
-    try {
-      const [inc, res, hosp, roads, disp, scen, ana, weath] = await Promise.all([
-        getIncidents(),
-        getResources(),
-        getHospitals(),
-        getRoadSegments(),
-        getDispatches(),
-        getActiveScenario().catch(() => undefined),
-        getAnalyticsSummary().catch(() => undefined),
-        getWeatherTelemetry().catch(() => undefined),
-      ]);
-      setIncidents(inc);
-      setResources(res);
-      setHospitals(hosp);
-      setRoadSegments(roads);
-      setDispatches(disp);
-      if (scen) setScenario(scen);
-      if (ana) setAnalytics(ana);
-      if (weath) setWeather(weath);
-
-      // Auto-select first critical incident if none selected
-      if (!selectedIncident && inc.length > 0) {
-        setSelectedIncident(inc[0]);
-      }
-    } catch (err) {
-      console.error('Failed to fetch command center telemetry:', err);
-    }
-  };
+  const [threatData, setThreatData] = useState<ThreatResponse | null>(null);
+  const [viewMode, setViewMode] = useState<'2D_MAP' | '3D_DIGITAL_TWIN'>('2D_MAP');
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 3500); // 3.5s live polling loop
-    return () => clearInterval(interval);
-  }, []);
-
-  // Actions
-  const handleRunOptimization = async () => {
-    setIsOptimizing(true);
-    try {
-      await runOptimization();
-      await fetchData();
-    } catch (err) {
-      console.error('Optimization failed:', err);
-    } finally {
-      setIsOptimizing(false);
-    }
-  };
-
-  const handleApproveDispatch = async (dispatchId: string) => {
-    try {
-      await approveDispatch(dispatchId);
-      await fetchData();
-    } catch (err) {
-      console.error('Failed to approve dispatch:', err);
-    }
-  };
-
-  const handleToggleRoad = async (roadId: string) => {
-    try {
-      await toggleRoadBlockage(roadId);
-      await fetchData();
-    } catch (err) {
-      console.error('Failed to toggle road:', err);
-    }
-  };
-
-  // Disruption Simulation Triggers
-  const handleInjectBlockage = async () => {
-    try {
-      await injectSimulationEvent('ROAD_BLOCKED', { road_name: 'Saidapet', title: 'Saidapet Bridge Submerged & Blocked' });
-      await fetchData();
-    } catch (err) {
-      console.error('Blockage injection failed:', err);
-    }
-  };
-
-  const handleInjectHospitalSurge = async () => {
-    try {
-      await injectSimulationEvent('HOSPITAL_SURGE', { hospital_name: 'Government', title: 'Rajiv Gandhi GH ICU Saturated' });
-      await fetchData();
-    } catch (err) {
-      console.error('Hospital surge injection failed:', err);
-    }
-  };
-
-  const handleInjectIncidentBurst = async () => {
-    try {
-      await injectSimulationEvent('NEW_INCIDENT', {
-        title: 'Emergency: 4 Dialysis Patients Trapped on 2nd Floor',
-        location_name: 'Velachery South Sector',
-        latitude: 12.9790,
-        longitude: 80.2150,
-        people_affected: 4,
-        vulnerable_people: 2,
-        vulnerability_flags: ['ELDERLY', 'DIALYSIS'],
+    let isMounted = true;
+    setLoading(true);
+    calculateThreatZone(params)
+      .then((data) => {
+        if (isMounted) {
+          setThreatData(data);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.error('Threat calculation failed:', err);
+        if (isMounted) setLoading(false);
       });
-      await fetchData();
-    } catch (err) {
-      console.error('Incident burst injection failed:', err);
-    }
+    return () => {
+      isMounted = false;
+    };
+  }, [params]);
+
+  const handleSelectFacilityA = () => {
+    setParams((prev) => ({
+      ...prev,
+      facility_type: 'FACILITY_A_LPG',
+      mass_kg: 40000,
+      fuel_type: 'LPG',
+    }));
   };
 
-  const handleResetDemo = async () => {
-    try {
-      await resetSimulation();
-      await fetchData();
-    } catch (err) {
-      console.error('Reset failed:', err);
-    }
+  const handleSelectFacilityB = () => {
+    setParams((prev) => ({
+      ...prev,
+      facility_type: 'FACILITY_B_POOL_FIRE',
+      pool_diameter_m: 30,
+      fuel_type: 'Gasoline',
+    }));
   };
-
-  const activeDispatchForSelected = dispatches.find(
-    (d) => selectedIncident && (d.incident === selectedIncident.id || d.incident_details?.id === selectedIncident.id)
-  );
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-canvas text-gray-100 overflow-hidden font-sans">
-      {/* 1. Global Header */}
-      <Header
-        scenario={scenario}
-        weather={weather}
-        onOpenIntake={() => setIsIntakeOpen(true)}
-        onRunOptimization={handleRunOptimization}
-        onResetDemo={handleResetDemo}
-        isOptimizing={isOptimizing}
-      />
-
-      {/* 2. Main 3-Zone Body (Left Queue, Center Map, Right Explainability Hub) */}
-      <div className="flex-1 flex overflow-hidden relative">
-        {/* Left: Incident Queue */}
-        <IncidentQueuePanel
-          incidents={incidents}
-          selectedIncidentId={selectedIncident?.id}
-          onSelectIncident={(inc) => setSelectedIncident(inc)}
-        />
-
-        {/* Center: Leaflet Situation GIS Map */}
-        <div className="flex-1 h-full relative">
-          <SituationMap
-            incidents={incidents}
-            resources={resources}
-            hospitals={hospitals}
-            roadSegments={roadSegments}
-            dispatches={dispatches}
-            selectedIncidentId={selectedIncident?.id}
-            onSelectIncident={(inc) => setSelectedIncident(inc)}
-            onToggleRoad={handleToggleRoad}
-          />
+    <div className="w-screen h-screen flex flex-col bg-slate-950 text-gray-100 overflow-hidden font-sans select-none">
+      {/* Top Main Command Header */}
+      <header className="h-14 bg-slate-950/90 backdrop-blur-xl border-b border-slate-800 px-4 flex items-center justify-between z-[1000]">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-red-950 border border-red-600/50 text-red-400">
+            <ShieldAlert className="w-5 h-5 text-red-400 animate-pulse" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-sm font-bold tracking-wider text-gray-100 font-mono uppercase">
+                RESQ-AI COMMAND — DER-02 THREAT-ZONE ESTIMATION
+              </h1>
+              <span className="text-[10px] bg-red-950 text-red-300 border border-red-700 px-2 py-0.5 rounded font-bold font-mono">
+                PHYSICAL HAZARD MODE
+              </span>
+            </div>
+            <div className="text-[11px] text-gray-400 font-mono">
+              Industrial Fire &amp; Explosion Threat Modeling | Chennai Petrochem Complex
+            </div>
+          </div>
         </div>
 
-        {/* Right: Explainability & Action Card */}
-        <ExplainabilityCard
-          incident={selectedIncident}
-          dispatch={activeDispatchForSelected}
-          onApproveDispatch={handleApproveDispatch}
+        {/* Header Right: 2D GIS / 3D Digital Twin View Switcher */}
+        <div className="flex items-center gap-2 font-mono">
+          <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-1 gap-1 text-xs">
+            <button
+              onClick={() => setViewMode('2D_MAP')}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded transition-colors ${
+                viewMode === '2D_MAP'
+                  ? 'bg-cyan-500 text-slate-950 font-bold'
+                  : 'text-slate-400 hover:text-gray-200'
+              }`}
+            >
+              <Map className="w-3.5 h-3.5" />
+              <span>2D GIS MAP</span>
+            </button>
+
+            <button
+              onClick={() => setViewMode('3D_DIGITAL_TWIN')}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded transition-colors ${
+                viewMode === '3D_DIGITAL_TWIN'
+                  ? 'bg-cyan-500 text-slate-950 font-bold'
+                  : 'text-slate-400 hover:text-gray-200'
+              }`}
+            >
+              <Box className="w-3.5 h-3.5" />
+              <span>3D DIGITAL TWIN</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Command Body (Control Dock + Map Viewport + Telemetry Panel) */}
+      <div className="flex-1 flex relative overflow-hidden">
+        {/* Left Parameter Control Dock */}
+        <ThreatControlDock
+          params={params}
+          onChangeParams={setParams}
+          onSelectFacilityA={handleSelectFacilityA}
+          onSelectFacilityB={handleSelectFacilityB}
         />
+
+        {/* Center Map / 3D Digital Twin Viewport */}
+        <div className="flex-1 relative bg-slate-900">
+          {viewMode === '2D_MAP' ? (
+            <ThreatMap2D
+              threatData={threatData}
+              facilityLat={params.latitude}
+              facilityLon={params.longitude}
+            />
+          ) : (
+            <ThreatDigitalTwin3D
+              threatData={threatData}
+              onExit3D={() => setViewMode('2D_MAP')}
+            />
+          )}
+
+          {/* Loading Overlay Indicator */}
+          {loading && (
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[2000] bg-slate-950/90 border border-cyan-500/50 px-4 py-1.5 rounded-full text-xs font-mono text-cyan-400 flex items-center gap-2 shadow-2xl">
+              <Compass className="w-4 h-4 animate-spin text-cyan-400" />
+              COMPUTING ANALYTICAL PHYSICS PLUME...
+            </div>
+          )}
+        </div>
+
+        {/* Right Threat Telemetry & Physics Rationale Panel */}
+        <ThreatTelemetryPanel threatData={threatData} />
       </div>
-
-      {/* 3. Bottom Fleet & Telemetry Dock */}
-      <FleetTelemetryDock
-        resources={resources}
-        hospitals={hospitals}
-        analytics={analytics}
-        onOpenActionPlan={() => setIsActionPlanOpen(true)}
-        onInjectBlockage={handleInjectBlockage}
-        onInjectHospitalSurge={handleInjectHospitalSurge}
-        onInjectIncidentBurst={handleInjectIncidentBurst}
-      />
-
-      {/* 4. Modals */}
-      <IncidentIntakeModal
-        isOpen={isIntakeOpen}
-        onClose={() => setIsIntakeOpen(false)}
-        onIncidentCreated={fetchData}
-      />
-
-      <ActionPlanViewer
-        isOpen={isActionPlanOpen}
-        onClose={() => setIsActionPlanOpen(false)}
-      />
     </div>
   );
 };
+export default CommandCenterPage;

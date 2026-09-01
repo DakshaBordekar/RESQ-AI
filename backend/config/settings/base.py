@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     'apps.simulation',
     'apps.ai',
     'apps.analytics',
+    'apps.threat_zone',
 ]
 
 MIDDLEWARE = [
@@ -87,7 +88,7 @@ WSGI_APPLICATION = 'config.wsgi.application'
 ASGI_APPLICATION = 'config.asgi.application'
 
 DATABASES = {
-    'default': env.db('DATABASE_URL', default='postgres://localhost:5432/resq_ai')
+    'default': env.db('DATABASE_URL', default='sqlite:///db.sqlite3')
 }
 
 AUTH_USER_MODEL = 'accounts.User'
