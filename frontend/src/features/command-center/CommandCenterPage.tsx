@@ -81,9 +81,9 @@ export const CommandCenterPage: React.FC<CommandCenterPageProps> = ({
   const [mobileTelemetryOpen, setMobileTelemetryOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
 
-  // Desktop Collapsible Panels State
-  const [leftDockOpen, setLeftDockOpen] = useState(true);
-  const [rightPanelOpen, setRightPanelOpen] = useState(true);
+  // Desktop Collapsible Panels State — default to collapsed (clean 100% map view)
+  const [leftDockOpen, setLeftDockOpen] = useState(false);
+  const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const [isImmersive3D, setIsImmersive3D] = useState(false);
 
   // Shared Leaflet map reference for Export PNG
@@ -261,22 +261,19 @@ export const CommandCenterPage: React.FC<CommandCenterPageProps> = ({
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-sm font-bold tracking-wider text-gray-100 font-mono uppercase truncate">
-                  RESQ-AI — DER-02 THREAT-ZONE
+                  RESQ-AI • INCIDENT COMMAND CENTER
                 </h1>
-                <span className="text-[10px] bg-red-950 text-red-300 border border-red-700 px-2 py-0.5 rounded font-bold font-mono hidden sm:inline">
-                  PHYSICAL HAZARD MODE
-                </span>
                 {currentTime && (
-                  <span className="text-[10px] bg-slate-900 text-cyan-300 border border-cyan-900/80 px-2 py-0.5 rounded font-mono hidden md:inline">
+                  <span className="text-[10px] bg-slate-900 text-slate-300 border border-slate-800 px-2 py-0.5 rounded font-mono hidden md:inline">
                     {currentTime}
                   </span>
                 )}
-                <span className="text-[10px] bg-slate-900 text-amber-300 border border-amber-900/80 px-2 py-0.5 rounded font-mono hidden lg:inline">
+                <span className="text-[10px] bg-slate-900 text-emerald-400 border border-emerald-900/60 px-2 py-0.5 rounded font-mono hidden lg:inline">
                   T+ {formatElapsed(elapsedSeconds)}
                 </span>
               </div>
-              <div className="text-[11px] text-gray-400 font-mono truncate hidden sm:block">
-                Industrial Fire &amp; Explosion | Chennai Petrochem Complex
+              <div className="text-[11px] text-slate-400 font-mono truncate hidden sm:block">
+                Industrial Fire &amp; Explosion • Plume Analysis
               </div>
             </div>
           </div>
@@ -352,49 +349,10 @@ export const CommandCenterPage: React.FC<CommandCenterPageProps> = ({
 
       {/* ── Main Body ─────────────────────────────────────────────────── */}
       <div className="flex-1 relative overflow-hidden flex">
-        {/* ─ Desktop layout ─ */}
+        {/* ─ Desktop layout (100% Fullscreen Map + Floating Glass Docks) ─ */}
         <div className="hidden md:flex w-full h-full relative">
-          {/* Left Control Dock (Collapsible) */}
-          {!isImmersive3D && (
-            <div
-              className={`relative transition-all duration-300 shrink-0 flex ${
-                leftDockOpen ? 'w-80' : 'w-12'
-              }`}
-            >
-              {leftDockOpen ? (
-                <div className="w-80 h-full relative overflow-hidden">
-                  <ThreatControlDock
-                    params={params}
-                    onChangeParams={setParams}
-                    onSelectFacilityA={handleSelectFacilityA}
-                    onSelectFacilityB={handleSelectFacilityB}
-                  />
-                  <button
-                    onClick={() => setLeftDockOpen(false)}
-                    title="Collapse Controls"
-                    className="absolute top-3 right-2 z-[600] p-1 bg-slate-900 border border-slate-700 rounded-lg text-gray-400 hover:text-white"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                </div>
-              ) : (
-                <div
-                  onClick={() => setLeftDockOpen(true)}
-                  title="Expand Control Dock"
-                  className="w-12 h-full bg-slate-950 border-r border-slate-800 flex flex-col items-center py-4 cursor-pointer hover:bg-slate-900 transition-colors z-[500]"
-                >
-                  <Sliders className="w-5 h-5 text-cyan-400 mb-4" />
-                  <span className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-widest rotate-90 whitespace-nowrap mt-8">
-                    CONTROLS
-                  </span>
-                  <ChevronRight className="w-4 h-4 text-gray-400 mt-auto" />
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Centre Map / 3D Viewport (Dynamically Expands) */}
-          <div className="flex-1 relative bg-slate-900 overflow-hidden">
+          {/* Central Map / 3D Twin Viewport — 100% Fullscreen */}
+          <div className="w-full h-full relative bg-slate-900 overflow-hidden">
             {viewMode === '2D_MAP' ? (
               <ThreatMap2D
                 threatData={threatData}
@@ -416,48 +374,61 @@ export const CommandCenterPage: React.FC<CommandCenterPageProps> = ({
               />
             )}
 
-            {/* Loading overlay */}
+            {/* Loading Overlay */}
             {loading && (
               <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[2000] bg-slate-950/90 border border-cyan-500/50 px-4 py-1.5 rounded-full text-xs font-mono text-cyan-400 flex items-center gap-2 shadow-2xl pointer-events-none">
                 <Compass className="w-4 h-4 animate-spin" />
                 COMPUTING PHYSICS PLUME…
               </div>
             )}
-          </div>
 
-          {/* Right Telemetry Panel (Collapsible) */}
-          {!isImmersive3D && (
-            <div
-              className={`relative transition-all duration-300 shrink-0 flex ${
-                rightPanelOpen ? 'w-88' : 'w-12'
-              }`}
-            >
-              {rightPanelOpen ? (
-                <div className="w-88 h-full relative overflow-hidden">
-                  <ThreatTelemetryPanel threatData={threatData} />
+            {/* Floating Left Control Dock / Pill Toggle */}
+            {!isImmersive3D && (
+              <div className="absolute top-4 left-4 z-[1000] pointer-events-auto">
+                {leftDockOpen ? (
+                  <div className="animate-in fade-in slide-in-from-left duration-200">
+                    <ThreatControlDock
+                      params={params}
+                      onChangeParams={setParams}
+                      onSelectFacilityA={handleSelectFacilityA}
+                      onSelectFacilityB={handleSelectFacilityB}
+                      onClose={() => setLeftDockOpen(false)}
+                    />
+                  </div>
+                ) : (
                   <button
-                    onClick={() => setRightPanelOpen(false)}
-                    title="Collapse Telemetry"
-                    className="absolute top-3 left-2 z-[600] p-1 bg-slate-900 border border-slate-700 rounded-lg text-gray-400 hover:text-white"
+                    onClick={() => setLeftDockOpen(true)}
+                    className="flex items-center gap-2 px-3.5 py-2 bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-gray-200 rounded-xl text-xs font-mono font-bold shadow-xl backdrop-blur-md transition-all hover:scale-[1.02]"
                   >
-                    <ChevronRight className="w-4 h-4" />
+                    <Sliders className="w-4 h-4 text-sky-400" />
+                    <span>Scenario Controls</span>
                   </button>
-                </div>
-              ) : (
-                <div
-                  onClick={() => setRightPanelOpen(true)}
-                  title="Expand Telemetry Panel"
-                  className="w-12 h-full bg-slate-950 border-l border-slate-800 flex flex-col items-center py-4 cursor-pointer hover:bg-slate-900 transition-colors z-[500]"
-                >
-                  <Activity className="w-5 h-5 text-cyan-400 mb-4" />
-                  <span className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-widest rotate-90 whitespace-nowrap mt-8">
-                    TELEMETRY
-                  </span>
-                  <ChevronLeft className="w-4 h-4 text-gray-400 mt-auto" />
-                </div>
-              )}
-            </div>
-          )}
+                )}
+              </div>
+            )}
+
+            {/* Floating Right Telemetry Panel / Pill Toggle */}
+            {!isImmersive3D && (
+              <div className="absolute top-4 right-4 z-[1000] pointer-events-auto">
+                {rightPanelOpen ? (
+                  <div className="animate-in fade-in slide-in-from-right duration-200">
+                    <ThreatTelemetryPanel
+                      threatData={threatData}
+                      onClose={() => setRightPanelOpen(false)}
+                    />
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setRightPanelOpen(true)}
+                    className="flex items-center gap-2 px-3.5 py-2 bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-gray-200 rounded-xl text-xs font-mono font-bold shadow-xl backdrop-blur-md transition-all hover:scale-[1.02]"
+                  >
+                    <Activity className="w-4 h-4 text-sky-400" />
+                    <span>Threat Telemetry</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* ─ Mobile layout (< 768px) ─ */}

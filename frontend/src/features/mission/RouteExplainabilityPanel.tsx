@@ -36,11 +36,11 @@ export const RouteExplainabilityPanel: React.FC<RouteExplainabilityPanelProps> =
             <Compass className="w-4 h-4" />
           </div>
           <div>
-            <div className="text-[9px] text-cyan-400 font-bold uppercase tracking-wider">
-              AI ROUTE EXPLAINABILITY
+            <div className="text-[9px] text-sky-400 font-bold uppercase tracking-wider">
+              INGRESS VECTOR EVALUATION
             </div>
             <div className="text-xs font-bold text-gray-200">
-              Ingress Optimization & Rejections
+              Upwind Optimization &amp; Disqualifications
             </div>
           </div>
         </div>
