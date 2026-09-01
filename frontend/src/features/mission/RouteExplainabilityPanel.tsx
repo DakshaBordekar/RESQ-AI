@@ -48,29 +48,29 @@ export const RouteExplainabilityPanel: React.FC<RouteExplainabilityPanelProps> =
 
       {/* Recommended Route Card */}
       {recommendedRoute && (
-        <div className="bg-emerald-950/40 border border-emerald-500/60 rounded-lg p-2.5 space-y-1.5">
+        <div className="bg-emerald-950/50 border border-emerald-500/70 rounded-lg p-2.5 space-y-1.5 shadow-lg">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-emerald-400 font-bold text-xs">
-              <CheckCircle2 className="w-4 h-4" />
-              <span>SELECTED: {recommendedRoute.gateName}</span>
+            <div className="flex items-center gap-1.5 text-emerald-300 font-bold text-xs">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <span>LOWER MODELED EXPOSURE: {recommendedRoute.gateName}</span>
             </div>
-            <span className="text-[9px] bg-emerald-900/80 text-emerald-200 px-1.5 py-0.2 rounded font-bold">
+            <span className="text-[9px] bg-emerald-900/90 text-emerald-200 border border-emerald-600/60 px-1.5 py-0.5 rounded font-bold font-mono">
               {recommendedRoute.headingDeg}° ({recommendedRoute.cardinal})
             </span>
           </div>
 
-          <p className="text-[10px] text-emerald-200/90 leading-relaxed">
+          <p className="text-[10px] text-emerald-200/90 leading-relaxed font-sans">
             {recommendedRoute.recommendationRationale}
           </p>
 
-          <div className="grid grid-cols-2 gap-1 text-[9px] pt-0.5">
-            <div className="bg-slate-950/60 p-1 rounded">
-              <span className="text-gray-400">LETHAL ZONE CROSSING:</span>
-              <strong className="text-emerald-400 block">0% (Safe Upwind)</strong>
+          <div className="grid grid-cols-2 gap-1 text-[9px] pt-0.5 font-mono">
+            <div className="bg-slate-950/70 p-1.5 rounded border border-emerald-900/60">
+              <span className="text-gray-400 block text-[8px]">LETHAL ZONE PENETRATION:</span>
+              <strong className="text-emerald-400 block text-xs font-bold">0% (Upwind Corridor)</strong>
             </div>
-            <div className="bg-slate-950/60 p-1 rounded">
-              <span className="text-gray-400">PEAK THERMAL FLUX:</span>
-              <strong className="text-cyan-300 block">{recommendedRoute.peakThermalExposureKwM2} kW/m²</strong>
+            <div className="bg-slate-950/70 p-1.5 rounded border border-emerald-900/60">
+              <span className="text-gray-400 block text-[8px]">PEAK THERMAL FLUX:</span>
+              <strong className="text-cyan-300 block text-xs font-bold">{recommendedRoute.peakThermalExposureKwM2} kW/m²</strong>
             </div>
           </div>
         </div>

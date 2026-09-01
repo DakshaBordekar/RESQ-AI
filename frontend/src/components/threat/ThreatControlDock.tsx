@@ -165,8 +165,8 @@ const WindRose: React.FC<{
   );
 };
 
-// ── Slider Row component ───────────────────────────────────────────────────
-const SliderRow: React.FC<{
+// ── Numeric Stepper + Slider Row ───────────────────────────────────────────
+const NumericStepperSlider: React.FC<{
   label: string;
   value: number;
   min: number;
@@ -175,28 +175,79 @@ const SliderRow: React.FC<{
   unit: string;
   color?: string;
   onChange: (v: number) => void;
-}> = ({ label, value, min, max, step, unit, color = 'cyan', onChange }) => (
-  <div>
-    <div className="flex justify-between text-xs mb-1">
-      <span className="text-gray-400">{label}:</span>
-      <span className={`text-${color}-400 font-bold font-mono`}>
-        {typeof value === 'number' && !Number.isInteger(value)
-          ? value.toFixed(2)
-          : value.toLocaleString()}{' '}
-        {unit}
-      </span>
+}> = ({ label, value, min, max, step, unit, color = 'cyan', onChange }) => {
+  const isMin = value <= min;
+  const isMax = value >= max;
+
+  const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const parsed = parseFloat(e.target.value);
+    if (!isNaN(parsed)) {
+      const clamped = Math.max(min, Math.min(max, parsed));
+      onChange(clamped);
+    }
+  };
+
+  const stepDown = () => {
+    const val = Math.max(min, parseFloat((value - step).toFixed(2)));
+    onChange(val);
+  };
+
+  const stepUp = () => {
+    const val = Math.min(max, parseFloat((value + step).toFixed(2)));
+    onChange(val);
+  };
+
+  return (
+    <div className="space-y-1.5 bg-slate-900/60 p-2.5 rounded-lg border border-slate-800/80">
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-gray-300 font-medium text-[11px]">{label}:</span>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={stepDown}
+            disabled={isMin}
+            className="w-5 h-5 flex items-center justify-center bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed border border-slate-700 rounded text-gray-300 font-mono text-xs"
+          >
+            -
+          </button>
+          <input
+            type="number"
+            min={min}
+            max={max}
+            step={step}
+            value={typeof value === 'number' && !Number.isInteger(value) ? value.toFixed(2) : value}
+            onChange={handleTextChange}
+            className="w-16 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-right font-mono font-bold text-xs text-cyan-300 focus:outline-none focus:border-cyan-500"
+          />
+          <button
+            type="button"
+            onClick={stepUp}
+            disabled={isMax}
+            className="w-5 h-5 flex items-center justify-center bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed border border-slate-700 rounded text-gray-300 font-mono text-xs"
+          >
+            +
+          </button>
+          <span className="text-gray-400 font-mono text-[10px] ml-0.5">{unit}</span>
+        </div>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+        className={`w-full accent-${color}-500 bg-slate-800 h-1.5 rounded cursor-pointer`}
+      />
+      <div className="flex justify-between text-[9px] text-gray-500 font-mono">
+        <span>Min: {min}</span>
+        {isMin && <span className="text-amber-400 font-semibold">Boundary Reached</span>}
+        {isMax && <span className="text-amber-400 font-semibold">Max Threshold</span>}
+        <span>Max: {max}</span>
+      </div>
     </div>
-    <input
-      type="range"
-      min={min}
-      max={max}
-      step={step}
-      value={value}
-      onChange={(e) => onChange(parseFloat(e.target.value))}
-      className={`w-full accent-${color}-500 bg-slate-800 h-1.5 rounded cursor-pointer`}
-    />
-  </div>
-);
+  );
+};
 
 // ── Main Dock ──────────────────────────────────────────────────────────────
 export const ThreatControlDock: React.FC<ThreatControlDockProps> = ({
@@ -206,6 +257,17 @@ export const ThreatControlDock: React.FC<ThreatControlDockProps> = ({
   onSelectFacilityB,
 }) => {
   const isFacilityA = params.facility_type === 'FACILITY_A_LPG';
+
+  const [openSections, setOpenSections] = React.useState({
+    facility: true,
+    geometry: true,
+    wind: true,
+    thresholds: false,
+  });
+
+  const toggleSection = (key: keyof typeof openSections) => {
+    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
 
   const set = (partial: Partial<ThreatCalculateParams>) =>
     onChangeParams({ ...params, ...partial });
@@ -225,219 +287,269 @@ export const ThreatControlDock: React.FC<ThreatControlDockProps> = ({
       className="
         threat-control-dock
         w-80 bg-slate-950/95 backdrop-blur-xl border-r border-slate-800
-        p-4 text-gray-100 font-mono flex flex-col gap-4 overflow-y-auto z-[500]
+        p-3 text-gray-100 font-mono flex flex-col gap-3 overflow-y-auto z-[500]
       "
     >
-      {/* ── Facility Configuration Buttons ──────────────────────────────── */}
-      <div className="flex flex-col gap-2 shrink-0">
-        <label className="text-[11px] text-gray-400 uppercase tracking-wider font-bold">
-          Facility Configurations
-        </label>
+      {/* ── Section 1: Facility & Substance ────────────────────────────── */}
+      <div className="border border-slate-800/90 rounded-xl bg-slate-900/40 overflow-hidden">
         <button
-          onClick={onSelectFacilityA}
-          className={`flex items-center gap-2 p-2.5 rounded-lg border text-left text-xs transition-all ${
-            isFacilityA
-              ? 'bg-red-950/70 border-red-500 text-red-200 font-bold ring-2 ring-red-500/40'
-              : 'bg-slate-900 border-slate-800 text-gray-400 hover:text-gray-200 hover:bg-slate-850'
-          }`}
+          type="button"
+          onClick={() => toggleSection('facility')}
+          className="w-full flex items-center justify-between p-2.5 bg-slate-900/80 hover:bg-slate-900 text-left transition-colors"
         >
-          <Flame className="w-4 h-4 text-red-400 shrink-0" />
-          <div>
-            <div className="text-gray-100 font-semibold">Facility A — LPG Sphere</div>
-            <div className="text-[10px] opacity-75">BLEVE Fireball & Blast</div>
+          <div className="flex items-center gap-2">
+            <Flame className="w-4 h-4 text-red-400" />
+            <span className="text-[11px] text-gray-200 font-bold uppercase tracking-wider">
+              1. Facility & Substance
+            </span>
           </div>
+          <span className="text-gray-400 text-xs">{openSections.facility ? '▼' : '▶'}</span>
         </button>
 
-        <button
-          onClick={onSelectFacilityB}
-          className={`flex items-center gap-2 p-2.5 rounded-lg border text-left text-xs transition-all ${
-            !isFacilityA
-              ? 'bg-amber-950/70 border-amber-500 text-amber-200 font-bold ring-2 ring-amber-500/40'
-              : 'bg-slate-900 border-slate-800 text-gray-400 hover:text-gray-200 hover:bg-slate-850'
-          }`}
-        >
-          <Flame className="w-4 h-4 text-amber-400 shrink-0" />
-          <div>
-            <div className="text-gray-100 font-semibold">Facility B — Pool Fire</div>
-            <div className="text-[10px] opacity-75">Sustained Thermal Radiation</div>
-          </div>
-        </button>
-      </div>
+        {openSections.facility && (
+          <div className="p-3 flex flex-col gap-2.5 border-t border-slate-800/80">
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={onSelectFacilityA}
+                className={`flex flex-col gap-1 p-2 rounded-lg border text-left transition-all ${
+                  isFacilityA
+                    ? 'bg-red-950/80 border-red-500 text-red-100 font-bold ring-1 ring-red-500/50'
+                    : 'bg-slate-900 border-slate-800 text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                <div className="text-xs font-semibold flex items-center gap-1">
+                  <Flame className="w-3.5 h-3.5 text-red-400" />
+                  Facility A
+                </div>
+                <div className="text-[9px] opacity-75 leading-tight">LPG BLEVE Fireball</div>
+              </button>
 
-      {/* ── Substance Dropdown ───────────────────────────────────────────── */}
-      <div className="flex flex-col gap-2 pt-2 border-t border-slate-800 shrink-0">
-        <label className="text-[11px] text-purple-400 uppercase tracking-wider font-bold flex items-center gap-1.5">
-          <FlaskConical className="w-3.5 h-3.5" />
-          Stored Substance
-        </label>
-        <select
-          value={params.fuel_type}
-          onChange={(e) => handleSubstanceChange(e.target.value)}
-          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-gray-200 font-mono focus:outline-none focus:border-purple-500 cursor-pointer"
-        >
-          {Object.entries(SUBSTANCE_PRESETS).map(([key, preset]) => (
-            <option key={key} value={key}>
-              {preset.label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* ── Tank Geometry Sliders ────────────────────────────────────────── */}
-      <div className="flex flex-col gap-3 pt-2 border-t border-slate-800 shrink-0">
-        <label className="text-[11px] text-cyan-400 uppercase tracking-wider font-bold flex items-center gap-1.5">
-          <Gauge className="w-3.5 h-3.5" />
-          Tank Geometry & Fuel Load
-        </label>
-
-        {isFacilityA ? (
-          <>
-            <SliderRow
-              label="Tank Diameter"
-              value={params.tank_diameter_m}
-              min={2}
-              max={30}
-              step={0.5}
-              unit="m"
-              color="red"
-              onChange={(v) => set({ tank_diameter_m: v })}
-            />
-            <SliderRow
-              label="Tank Volume"
-              value={params.tank_volume_m3}
-              min={10}
-              max={500}
-              step={10}
-              unit="m³"
-              color="red"
-              onChange={(v) => {
-                const rho = 500;
-                const mass = rho * v * (params.fill_fraction ?? 0.85);
-                set({ tank_volume_m3: v, mass_kg: Math.round(mass) });
-              }}
-            />
-            <SliderRow
-              label="Fill Fraction"
-              value={params.fill_fraction ?? 0.85}
-              min={0.1}
-              max={0.95}
-              step={0.05}
-              unit=""
-              color="red"
-              onChange={(v) => {
-                const mass = 500 * params.tank_volume_m3 * v;
-                set({ fill_fraction: v, mass_kg: Math.round(mass) });
-              }}
-            />
-            <div className="text-[10px] text-gray-500 text-right font-mono">
-              LPG Mass: <span className="text-red-400 font-bold">{params.mass_kg.toLocaleString()} kg</span>
+              <button
+                onClick={onSelectFacilityB}
+                className={`flex flex-col gap-1 p-2 rounded-lg border text-left transition-all ${
+                  !isFacilityA
+                    ? 'bg-amber-950/80 border-amber-500 text-amber-100 font-bold ring-1 ring-amber-500/50'
+                    : 'bg-slate-900 border-slate-800 text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                <div className="text-xs font-semibold flex items-center gap-1">
+                  <Flame className="w-3.5 h-3.5 text-amber-400" />
+                  Facility B
+                </div>
+                <div className="text-[9px] opacity-75 leading-tight">Pool Fire</div>
+              </button>
             </div>
-          </>
-        ) : (
-          <>
-            <SliderRow
-              label="Pool Diameter D"
-              value={params.pool_diameter_m}
-              min={5}
-              max={80}
-              step={1}
-              unit="m"
-              color="amber"
-              onChange={(v) => set({ pool_diameter_m: v })}
-            />
-            <SliderRow
-              label="Tank Volume"
-              value={params.tank_volume_m3}
-              min={10}
-              max={500}
-              step={10}
-              unit="m³"
-              color="amber"
-              onChange={(v) => set({ tank_volume_m3: v })}
-            />
-            <SliderRow
-              label="Fill Fraction"
-              value={params.fill_fraction ?? 0.70}
-              min={0.1}
-              max={0.95}
-              step={0.05}
-              unit=""
-              color="amber"
-              onChange={(v) => set({ fill_fraction: v })}
-            />
-          </>
+
+            <div className="flex flex-col gap-1 pt-1">
+              <label className="text-[10px] text-purple-400 font-bold uppercase tracking-wider flex items-center gap-1">
+                <FlaskConical className="w-3 h-3" />
+                Stored Chemical Compound
+              </label>
+              <select
+                value={params.fuel_type}
+                onChange={(e) => handleSubstanceChange(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-purple-500 cursor-pointer"
+              >
+                {Object.entries(SUBSTANCE_PRESETS).map(([key, preset]) => (
+                  <option key={key} value={key}>
+                    {preset.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
         )}
       </div>
 
-      {/* ── Wind Telemetry ───────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-3 pt-2 border-t border-slate-800 shrink-0">
-        <label className="text-[11px] text-cyan-400 uppercase tracking-wider font-bold flex items-center gap-1.5">
-          <Wind className="w-3.5 h-3.5" />
-          Prevailing Wind Telemetry
-        </label>
-
-        {/* SVG Wind Rose */}
-        <div className="flex justify-center py-1">
-          <WindRose
-            bearing={params.wind_direction_deg}
-            onChange={(deg) => set({ wind_direction_deg: deg })}
-          />
-        </div>
-
-        {/* Wind Speed Slider */}
-        <SliderRow
-          label="Wind Speed"
-          value={params.wind_speed_ms}
-          min={0}
-          max={30}
-          step={0.5}
-          unit="m/s"
-          color="cyan"
-          onChange={(v) => set({ wind_speed_ms: v })}
-        />
-
-        {/* Numeric bearing input for precision */}
-        <div>
-          <div className="flex justify-between text-xs mb-1">
-            <span className="text-gray-400">Bearing (precise):</span>
-            <span className="text-cyan-400 font-bold">{params.wind_direction_deg}°</span>
+      {/* ── Section 2: Storage Geometry & Fuel Load ─────────────────────── */}
+      <div className="border border-slate-800/90 rounded-xl bg-slate-900/40 overflow-hidden">
+        <button
+          type="button"
+          onClick={() => toggleSection('geometry')}
+          className="w-full flex items-center justify-between p-2.5 bg-slate-900/80 hover:bg-slate-900 text-left transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <Gauge className="w-4 h-4 text-cyan-400" />
+            <span className="text-[11px] text-gray-200 font-bold uppercase tracking-wider">
+              2. Geometry & Fuel Load
+            </span>
           </div>
-          <input
-            type="range"
-            min={0}
-            max={360}
-            step={1}
-            value={params.wind_direction_deg}
-            onChange={(e) => set({ wind_direction_deg: parseFloat(e.target.value) })}
-            className="w-full accent-cyan-500 bg-slate-800 h-1.5 rounded cursor-pointer"
-          />
-        </div>
+          <span className="text-gray-400 text-xs">{openSections.geometry ? '▼' : '▶'}</span>
+        </button>
+
+        {openSections.geometry && (
+          <div className="p-3 flex flex-col gap-2.5 border-t border-slate-800/80">
+            {isFacilityA ? (
+              <>
+                <NumericStepperSlider
+                  label="Tank Diameter"
+                  value={params.tank_diameter_m}
+                  min={2}
+                  max={30}
+                  step={0.5}
+                  unit="m"
+                  color="red"
+                  onChange={(v) => set({ tank_diameter_m: v })}
+                />
+                <NumericStepperSlider
+                  label="Tank Volume"
+                  value={params.tank_volume_m3}
+                  min={10}
+                  max={500}
+                  step={10}
+                  unit="m³"
+                  color="red"
+                  onChange={(v) => {
+                    const rho = 500;
+                    const mass = rho * v * (params.fill_fraction ?? 0.85);
+                    set({ tank_volume_m3: v, mass_kg: Math.round(mass) });
+                  }}
+                />
+                <NumericStepperSlider
+                  label="Fill Fraction"
+                  value={params.fill_fraction ?? 0.85}
+                  min={0.1}
+                  max={0.95}
+                  step={0.05}
+                  unit=""
+                  color="red"
+                  onChange={(v) => {
+                    const mass = 500 * params.tank_volume_m3 * v;
+                    set({ fill_fraction: v, mass_kg: Math.round(mass) });
+                  }}
+                />
+                <div className="bg-slate-900/90 border border-slate-800 p-2 rounded flex justify-between items-center text-xs">
+                  <span className="text-gray-400 text-[10px]">Calculated Mass:</span>
+                  <span className="text-red-400 font-bold font-mono">{params.mass_kg.toLocaleString()} kg</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <NumericStepperSlider
+                  label="Pool Diameter D"
+                  value={params.pool_diameter_m}
+                  min={5}
+                  max={80}
+                  step={1}
+                  unit="m"
+                  color="amber"
+                  onChange={(v) => set({ pool_diameter_m: v })}
+                />
+                <NumericStepperSlider
+                  label="Tank Volume"
+                  value={params.tank_volume_m3}
+                  min={10}
+                  max={500}
+                  step={10}
+                  unit="m³"
+                  color="amber"
+                  onChange={(v) => set({ tank_volume_m3: v })}
+                />
+                <NumericStepperSlider
+                  label="Fill Fraction"
+                  value={params.fill_fraction ?? 0.70}
+                  min={0.1}
+                  max={0.95}
+                  step={0.05}
+                  unit=""
+                  color="amber"
+                  onChange={(v) => set({ fill_fraction: v })}
+                />
+              </>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* ── Zones Info Footer ─────────────────────────────────────────────── */}
-      <div className="pt-2 border-t border-slate-800 shrink-0">
-        <label className="text-[11px] text-gray-400 uppercase tracking-wider font-bold flex items-center gap-1.5 mb-2">
-          <Layers3 className="w-3.5 h-3.5" />
-          Active Zone Thresholds
-        </label>
-        {[
-          { color: '#ef4444', label: 'Zone 1 — Lethal', val: '> 37.5 kW/m² | No Entry' },
-          { color: '#f97316', label: 'Zone 2 — Serious', val: '12.5–37.5 kW/m² | Evacuate' },
-          { color: '#eab308', label: 'Zone 3 — Injury', val: '4.7–12.5 kW/m² | First Aid Limit' },
-          { color: '#22c55e', label: 'Zone 4 — Awareness', val: '1.6–4.7 kW/m² | Command Post' },
-        ].map(({ color, label, val }) => (
-          <div key={label} className="flex items-start gap-2 text-[10px] mb-1.5">
-            <div
-              className="w-2.5 h-2.5 rounded-sm mt-0.5 shrink-0"
-              style={{ background: color }}
-            />
-            <div>
-              <div className="text-gray-300 font-semibold">{label}</div>
-              <div className="text-gray-500">{val}</div>
-            </div>
+      {/* ── Section 3: Wind & Meteorology ───────────────────────────────── */}
+      <div className="border border-slate-800/90 rounded-xl bg-slate-900/40 overflow-hidden">
+        <button
+          type="button"
+          onClick={() => toggleSection('wind')}
+          className="w-full flex items-center justify-between p-2.5 bg-slate-900/80 hover:bg-slate-900 text-left transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <Wind className="w-4 h-4 text-cyan-400" />
+            <span className="text-[11px] text-gray-200 font-bold uppercase tracking-wider">
+              3. Wind & Meteorology
+            </span>
           </div>
-        ))}
+          <span className="text-gray-400 text-xs">{openSections.wind ? '▼' : '▶'}</span>
+        </button>
+
+        {openSections.wind && (
+          <div className="p-3 flex flex-col gap-2.5 border-t border-slate-800/80">
+            <div className="flex justify-center py-1">
+              <WindRose
+                bearing={params.wind_direction_deg}
+                onChange={(deg) => set({ wind_direction_deg: deg })}
+              />
+            </div>
+
+            <NumericStepperSlider
+              label="Wind Speed"
+              value={params.wind_speed_ms}
+              min={0}
+              max={30}
+              step={0.5}
+              unit="m/s"
+              color="cyan"
+              onChange={(v) => set({ wind_speed_ms: v })}
+            />
+
+            <NumericStepperSlider
+              label="Wind Bearing (Precise)"
+              value={params.wind_direction_deg}
+              min={0}
+              max={360}
+              step={1}
+              unit="°"
+              color="cyan"
+              onChange={(v) => set({ wind_direction_deg: v })}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* ── Section 4: Zone Threshold Reference ─────────────────────────── */}
+      <div className="border border-slate-800/90 rounded-xl bg-slate-900/40 overflow-hidden">
+        <button
+          type="button"
+          onClick={() => toggleSection('thresholds')}
+          className="w-full flex items-center justify-between p-2.5 bg-slate-900/80 hover:bg-slate-900 text-left transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <Layers3 className="w-4 h-4 text-amber-400" />
+            <span className="text-[11px] text-gray-200 font-bold uppercase tracking-wider">
+              4. Zone Threshold Tiers
+            </span>
+          </div>
+          <span className="text-gray-400 text-xs">{openSections.thresholds ? '▼' : '▶'}</span>
+        </button>
+
+        {openSections.thresholds && (
+          <div className="p-3 border-t border-slate-800/80 space-y-2">
+            {[
+              { color: '#ef4444', label: 'Zone 1 — Lethal', val: '> 37.5 kW/m² | Extreme Hazard' },
+              { color: '#f97316', label: 'Zone 2 — Serious', val: '12.5–37.5 kW/m² | Evacuate' },
+              { color: '#eab308', label: 'Zone 3 — Injury', val: '4.7–12.5 kW/m² | First Aid Limit' },
+              { color: '#22c55e', label: 'Zone 4 — Awareness', val: '1.6–4.7 kW/m² | Staging Line' },
+            ].map(({ color, label, val }) => (
+              <div key={label} className="flex items-start gap-2 text-[10px]">
+                <div
+                  className="w-2.5 h-2.5 rounded-sm mt-0.5 shrink-0"
+                  style={{ background: color }}
+                />
+                <div>
+                  <div className="text-gray-300 font-semibold">{label}</div>
+                  <div className="text-gray-500">{val}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
 };
+

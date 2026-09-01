@@ -7,23 +7,39 @@
   --color-bg-surface-1: #111827;
   --color-bg-surface-2: #1F2937;
   --color-bg-surface-3: #374151;
+  --color-border-subtle: #1F2937;
+  --color-border-default: #374151;
+
+  --color-zone-1-lethal: #EF4444;
+  --color-zone-2-serious: #F97316;
+  --color-zone-3-injury: #EAB308;
+  --color-zone-4-awareness: #10B981;
+  --color-ingress-emerald: #10B981;
+  --color-rejected-red: #EF4444;
+  --color-telemetry-cyan: #06B6D4;
 }
 
 body {
   margin: 0;
   padding: 0;
-  background-color: #090D16;
+  background-color: var(--color-bg-canvas);
   color: #F3F4F6;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   overflow: hidden;
 }
 
+/* Numeric typography utility */
+.font-numeric {
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ── Leaflet Map Resets ─────────────────────────────────────────────────── */
 .leaflet-container {
-  background: #090D16 !important;
+  background: var(--color-bg-canvas) !important;
   width: 100%;
   height: 100%;
-  font-family: 'Inter', monospace;
+  font-family: 'Inter', sans-serif;
 }
 
 .leaflet-popup-content-wrapper {
@@ -38,12 +54,13 @@ body {
   background: #0f172a;
 }
 
-/* Safe approach tooltip */
+/* Lower Modeled Exposure approach tooltip */
+.lower-exposure-approach-tooltip,
 .safe-approach-tooltip {
   background: rgba(6, 78, 59, 0.95) !important;
   border: 1px solid #10b981 !important;
   color: #6ee7b7 !important;
-  font-family: monospace !important;
+  font-family: 'JetBrains Mono', monospace !important;
   font-size: 11px !important;
   font-weight: bold !important;
   border-radius: 6px !important;

@@ -404,7 +404,7 @@ export const TwinSimulationHUD: React.FC<TwinSimulationHUDProps> = ({
                   <div>TNT Equiv: <strong>{simulationResult.physicsMetrics.wTntEquivalentKg} kg</strong></div>
                   <div>Energy: <strong>{simulationResult.physicsMetrics.totalEnergyGJ} GJ</strong></div>
                   <div>Stored Mass: <strong>{simulationResult.threatParams.mass_kg.toLocaleString()} kg</strong></div>
-                  <div>Safe Corridor: <strong>{simulationResult.physicsMetrics.safeHeadingDeg}° ({simulationResult.physicsMetrics.safeCardinal})</strong></div>
+                  <div>Lower Exposure Corridor: <strong>{simulationResult.physicsMetrics.safeHeadingDeg}° ({simulationResult.physicsMetrics.safeCardinal})</strong></div>
                 </div>
               </div>
             )}
@@ -544,7 +544,7 @@ export const TwinSimulationHUD: React.FC<TwinSimulationHUDProps> = ({
 
             <div className="grid grid-cols-2 gap-2 text-[9px]">
               <div className="bg-slate-950 p-2 rounded-lg border border-slate-800">
-                <div className="text-gray-500">SAFE CORRIDOR ADHERENCE</div>
+                <div className="text-gray-500">LOWER EXPOSURE ADHERENCE</div>
                 <strong className="text-emerald-300 text-xs">100% (UPWIND)</strong>
               </div>
               <div className="bg-slate-950 p-2 rounded-lg border border-slate-800">

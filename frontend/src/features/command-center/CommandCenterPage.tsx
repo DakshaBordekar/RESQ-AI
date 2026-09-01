@@ -120,6 +120,30 @@ export const CommandCenterPage: React.FC<CommandCenterPageProps> = ({
     };
   }, [params]);
 
+  // Live UTC Clock & Elapsed Timer state
+  const [currentTime, setCurrentTime] = useState<string>('');
+  const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
+
+  useEffect(() => {
+    const updateTime = () => {
+      const now = new Date();
+      setCurrentTime(now.toISOString().substring(11, 19) + ' UTC');
+    };
+    updateTime();
+    const interval = setInterval(() => {
+      updateTime();
+      setElapsedSeconds((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const formatElapsed = (sec: number) => {
+    const hrs = Math.floor(sec / 3600);
+    const mins = Math.floor((sec % 3600) / 60);
+    const secs = sec % 60;
+    return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
   const handleSelectFacilityA = () =>
     setParams((prev) => ({ ...prev, ...FACILITY_A_DEFAULTS }));
 
@@ -241,6 +265,14 @@ export const CommandCenterPage: React.FC<CommandCenterPageProps> = ({
                 </h1>
                 <span className="text-[10px] bg-red-950 text-red-300 border border-red-700 px-2 py-0.5 rounded font-bold font-mono hidden sm:inline">
                   PHYSICAL HAZARD MODE
+                </span>
+                {currentTime && (
+                  <span className="text-[10px] bg-slate-900 text-cyan-300 border border-cyan-900/80 px-2 py-0.5 rounded font-mono hidden md:inline">
+                    {currentTime}
+                  </span>
+                )}
+                <span className="text-[10px] bg-slate-900 text-amber-300 border border-amber-900/80 px-2 py-0.5 rounded font-mono hidden lg:inline">
+                  T+ {formatElapsed(elapsedSeconds)}
                 </span>
               </div>
               <div className="text-[11px] text-gray-400 font-mono truncate hidden sm:block">

@@ -18,6 +18,8 @@ const MetricCard: React.FC<{
 );
 
 export const ThreatTelemetryPanel: React.FC<ThreatTelemetryPanelProps> = ({ threatData }) => {
+  const [showPhysicsRationale, setShowPhysicsRationale] = React.useState(false);
+
   if (!threatData) return null;
 
   const isFacilityA = threatData.facility_type === 'FACILITY_A_LPG';
@@ -26,51 +28,105 @@ export const ThreatTelemetryPanel: React.FC<ThreatTelemetryPanelProps> = ({ thre
   const bands = threatData.threat_bands;
 
   return (
-    <div className="threat-telemetry-panel w-88 bg-slate-950/95 backdrop-blur-xl border-l border-slate-800 p-4 text-gray-100 font-mono flex flex-col gap-4 overflow-y-auto z-[500]">
-      {/* ── Header ──────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-3 shrink-0">
+    <div className="threat-telemetry-panel w-88 bg-slate-950/95 backdrop-blur-xl border-l border-slate-800 p-3.5 text-gray-100 font-mono flex flex-col gap-3 overflow-y-auto z-[500]">
+      {/* ── Level 1: Header & Facility Classification ───────────────────── */}
+      <div className="flex items-center justify-between border-b border-slate-800 pb-2.5 shrink-0">
         <div className="flex items-center gap-2">
-          <Activity className="w-5 h-5 text-cyan-400 animate-pulse" />
-          <span className="text-xs font-bold text-gray-100 uppercase">Threat Telemetry</span>
+          <Activity className="w-4 h-4 text-cyan-400 animate-pulse" />
+          <span className="text-xs font-bold text-gray-100 uppercase tracking-wider">
+            Threat Telemetry
+          </span>
         </div>
-        <span className="text-[10px] bg-red-950 text-red-300 border border-red-700 px-2 py-0.5 rounded font-bold">
+        <span className="text-[10px] bg-red-950/90 text-red-300 border border-red-700/80 px-2 py-0.5 rounded font-bold">
           ANALYTICAL
         </span>
       </div>
 
-      {/* ── Facility Classification ──────────────────────────────────────── */}
-      <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl shrink-0">
-        <div className="text-[10px] text-gray-400 uppercase tracking-widest font-bold mb-1">
-          Facility Classification
+      {/* Facility Classification Card */}
+      <div className="bg-slate-900/90 border border-slate-800 p-3 rounded-xl shrink-0">
+        <div className="flex justify-between items-start mb-1">
+          <div className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">
+            Facility Classification
+          </div>
+          <span className="text-[9px] bg-cyan-950 text-cyan-300 border border-cyan-800 px-1.5 py-0.5 rounded">
+            CCPS 2010
+          </span>
         </div>
         <div className="text-sm font-bold text-gray-100 mb-1">{threatData.facility_name}</div>
-        <div className="text-xs text-amber-400 font-semibold">{metrics.primary_hazard}</div>
+        <div className="text-xs text-amber-400 font-semibold flex items-center gap-1.5">
+          <Flame className="w-3.5 h-3.5" />
+          {metrics.primary_hazard}
+        </div>
       </div>
 
-      {/* ── Physics Metrics ──────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-2 text-xs shrink-0">
-        {isFacilityA ? (
-          <>
-            <MetricCard label="Fireball Radius (r_f):" value={`${metrics.fireball_radius_m} m`} color="red" />
-            <MetricCard label="Fireball Duration (t_f):" value={`${metrics.fireball_duration_s} s`} color="amber" />
-            <MetricCard label="Total Energy Released:" value={`${metrics.total_energy_gj} GJ`} color="indigo" />
-            <MetricCard label="TNT Equivalent:" value={`${metrics.w_tnt_equivalent_kg?.toLocaleString()} kg`} color="purple" />
-          </>
-        ) : (
-          <>
-            <MetricCard label="Flame Height (H):" value={`${metrics.flame_height_m} m`} color="amber" />
-            <MetricCard label="Wind Flame Tilt:" value={`${metrics.flame_tilt_deg}°`} color="cyan" />
-            <MetricCard label="Downwind Shift (Δ):" value={`${metrics.downwind_displacement_m} m`} color="red" />
-            <MetricCard label="Radiative Power:" value={`${metrics.total_radiative_power_mw} MW`} color="emerald" />
-          </>
-        )}
+      {/* ── Level 1: Lower Modeled Exposure Corridor ────────────────────── */}
+      {safeVec && (
+        <div className="bg-emerald-950/70 border border-emerald-500/60 p-3 rounded-xl shadow-lg shrink-0">
+          <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs mb-1">
+            <ShieldCheck className="w-4 h-4 text-emerald-300" />
+            LOWER MODELED EXPOSURE CORRIDOR
+          </div>
+          <div className="text-sm font-bold text-white mb-1 font-mono">
+            HEADING {safeVec.cardinal_direction} ({safeVec.safe_angle_deg}°)
+          </div>
+          <div className="text-[10px] text-emerald-200/90 leading-relaxed font-sans">
+            Stage and approach strictly from the{' '}
+            <strong className="font-mono text-emerald-300">{safeVec.cardinal_direction}</strong> upwind corridor
+            to maintain lower modeled thermal radiant flux and overpressure exposure.
+          </div>
+        </div>
+      )}
+
+      {/* ── Level 2: Grouped Physics Telemetry ───────────────────────────── */}
+      <div className="space-y-2 shrink-0">
+        {/* Thermal Hazard Group */}
+        <div className="bg-slate-900/80 border border-slate-800/90 p-3 rounded-xl">
+          <div className="text-[10px] text-amber-400 uppercase tracking-wider font-bold mb-2 flex items-center gap-1">
+            <Flame className="w-3.5 h-3.5" />
+            Thermal Radiant Telemetry
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            {isFacilityA ? (
+              <>
+                <MetricCard label="Fireball Radius (r_f):" value={`${metrics.fireball_radius_m} m`} color="red" />
+                <MetricCard label="Fireball Duration (t_f):" value={`${metrics.fireball_duration_s} s`} color="amber" />
+              </>
+            ) : (
+              <>
+                <MetricCard label="Flame Height (H):" value={`${metrics.flame_height_m} m`} color="amber" />
+                <MetricCard label="Radiative Power:" value={`${metrics.total_radiative_power_mw} MW`} color="emerald" />
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Blast / Dynamics Group */}
+        <div className="bg-slate-900/80 border border-slate-800/90 p-3 rounded-xl">
+          <div className="text-[10px] text-cyan-400 uppercase tracking-wider font-bold mb-2 flex items-center gap-1">
+            <Activity className="w-3.5 h-3.5" />
+            Blast & Vector Dynamics
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            {isFacilityA ? (
+              <>
+                <MetricCard label="Total Energy Released:" value={`${metrics.total_energy_gj} GJ`} color="indigo" />
+                <MetricCard label="TNT Equivalent:" value={`${metrics.w_tnt_equivalent_kg?.toLocaleString()} kg`} color="purple" />
+              </>
+            ) : (
+              <>
+                <MetricCard label="Wind Flame Tilt:" value={`${metrics.flame_tilt_deg}°`} color="cyan" />
+                <MetricCard label="Downwind Shift (Δ):" value={`${metrics.downwind_displacement_m} m`} color="red" />
+              </>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* ── Zone Distance Readout ─────────────────────────────────────────── */}
+      {/* ── Level 2: Downwind Worst-Case Zone Radii ──────────────────────── */}
       <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl shrink-0">
         <div className="flex items-center gap-1.5 text-cyan-400 font-bold text-[11px] uppercase tracking-wider mb-2">
           <Ruler className="w-3.5 h-3.5" />
-          Zone Radii (Downwind Worst-Case)
+          Downwind Zone Radii (Max)
         </div>
         {[
           { key: 'red_lethal' as const, color: '#ef4444', label: 'Zone 1 — Lethal' },
@@ -84,56 +140,50 @@ export const ThreatTelemetryPanel: React.FC<ThreatTelemetryPanelProps> = ({ thre
             <div key={key} className="flex items-center justify-between text-xs mb-1.5">
               <div className="flex items-center gap-2">
                 <div className="w-2.5 h-2.5 rounded-sm" style={{ background: color }} />
-                <span className="text-gray-300">{label}</span>
+                <span className="text-gray-300 text-[11px]">{label}</span>
               </div>
-              <span className="text-gray-200 font-bold font-mono">{band.max_radius_m} m</span>
+              <span className="text-gray-100 font-bold font-mono text-xs">{band.max_radius_m} m</span>
             </div>
           );
         })}
       </div>
 
-      {/* ── Safe Approach Corridor ───────────────────────────────────────── */}
-      {safeVec && (
-        <div className="bg-emerald-950/60 border border-emerald-500/50 p-3 rounded-xl shadow-lg shrink-0">
-          <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs mb-1">
-            <ShieldCheck className="w-4 h-4" />
-            SAFE APPROACH CORRIDOR
+      {/* ── Level 3: Progressive Disclosure Accordion (Physics Rationale) ── */}
+      <div className="border border-slate-800/90 rounded-xl bg-slate-900/50 overflow-hidden shrink-0">
+        <button
+          type="button"
+          onClick={() => setShowPhysicsRationale((prev) => !prev)}
+          className="w-full flex items-center justify-between p-2.5 bg-slate-900/90 hover:bg-slate-900 text-left transition-colors"
+        >
+          <div className="flex items-center gap-1.5 text-cyan-400 font-bold text-[11px] uppercase tracking-wider">
+            <Info className="w-3.5 h-3.5" />
+            Engineering Physics Rationale
           </div>
-          <div className="text-sm font-bold text-white mb-1">
-            HEADING {safeVec.cardinal_direction} ({safeVec.safe_angle_deg}°)
-          </div>
-          <div className="text-[11px] text-emerald-200 opacity-90">
-            Stage and approach strictly from the{' '}
-            <strong>{safeVec.cardinal_direction}</strong> upwind corridor to avoid lethal
-            thermal flux and blast shockwaves.
-          </div>
-        </div>
-      )}
+          <span className="text-gray-400 text-xs">{showPhysicsRationale ? '▼' : '▶'}</span>
+        </button>
 
-      {/* ── Physics Rationale ────────────────────────────────────────────── */}
-      <div className="bg-slate-900/90 border border-slate-800 p-3 rounded-xl text-xs space-y-2 shrink-0">
-        <div className="flex items-center gap-1.5 text-cyan-400 font-bold text-[11px] uppercase tracking-wider">
-          <Info className="w-3.5 h-3.5" />
-          Physics Rationale
-        </div>
-        {isFacilityA ? (
-          <p className="text-gray-300 text-[11px] leading-relaxed">
-            <strong>LPG BLEVE:</strong> Superheated liquid releases stored energy instantaneously
-            (~Roberts fireball model). SEP ≈ 175 kW/m² drives a massive fireball with secondary
-            TNT-equivalent blast overpressure (Kingery–Bulmash). Lethal zone radius ≈ 3.4× wider
-            than pool fire at same fill mass.
-          </p>
-        ) : (
-          <p className="text-gray-300 text-[11px] leading-relaxed">
-            <strong>Pool Fire:</strong> Sustained burning — solid-flame cylindrical model (Thomas
-            1963). Flame tilts downwind (Welker & Sliepcevich). SEP ≈ 45 kW/m² gives
-            continuous radiation, 10× smaller lethal zone area than BLEVE but highly wind-sensitive.
-          </p>
+        {showPhysicsRationale && (
+          <div className="p-3 border-t border-slate-800/80 text-xs space-y-2 bg-slate-950/60 font-sans">
+            {isFacilityA ? (
+              <p className="text-gray-300 text-[11px] leading-relaxed">
+                <strong className="text-red-400 font-mono">LPG BLEVE:</strong> Superheated liquid releases stored energy instantaneously
+                (~Roberts fireball model). SEP ≈ 175 kW/m² drives a massive fireball with secondary
+                TNT-equivalent blast overpressure (Kingery–Bulmash). Lethal zone radius ≈ 3.4× wider
+                than pool fire at same fill mass.
+              </p>
+            ) : (
+              <p className="text-gray-300 text-[11px] leading-relaxed">
+                <strong className="text-amber-400 font-mono">Pool Fire:</strong> Sustained burning — solid-flame cylindrical model (Thomas
+                1963). Flame tilts downwind (Welker & Sliepcevich). SEP ≈ 45 kW/m² gives
+                continuous radiation, 10× smaller lethal zone area than BLEVE but highly wind-sensitive.
+              </p>
+            )}
+            <p className="text-gray-500 text-[10px] leading-relaxed font-mono">
+              Wind kernel: r_eff(θ) = r_calm / [1 + k·U·cos(θ−θ_wind)], k=0.06.
+              Calibrated against ALOHA 5.4.7 (±12% agreement). CCPS 2010 zone thresholds.
+            </p>
+          </div>
         )}
-        <p className="text-gray-500 text-[10px] leading-relaxed">
-          Wind kernel: r_eff(θ) = r_calm / [1 + k·U·cos(θ−θ_wind)], k=0.06.
-          Calibrated against ALOHA 5.4.7 (±12% agreement). CCPS 2010 zone thresholds.
-        </p>
       </div>
     </div>
   );

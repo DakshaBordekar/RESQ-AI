@@ -205,11 +205,11 @@ export const ThreatMap2D: React.FC<ThreatMap2DProps> = ({
       }).addTo(group);
 
       arrowLine.bindTooltip(
-        `<div style="font-family:monospace;font-size:11px;font-weight:bold;color:#065f46;">
-          ↑ SAFE APPROACH ROUTE<br/>
-          ${safeVec.cardinal_direction} — ${safeVec.safe_angle_deg}° (Upwind)
+        `<div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:bold;color:#065f46;">
+          ↑ LOWER MODELED EXPOSURE ROUTE<br/>
+          ${safeVec.cardinal_direction} — ${safeVec.safe_angle_deg}° (Upwind Corridor)
          </div>`,
-        { permanent: true, direction: 'top', className: 'safe-approach-tooltip' }
+        { permanent: true, direction: 'top', className: 'lower-exposure-approach-tooltip' }
       );
     }
 
