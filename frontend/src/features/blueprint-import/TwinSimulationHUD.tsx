@@ -414,13 +414,13 @@ export const TwinSimulationHUD: React.FC<TwinSimulationHUDProps> = ({
 
       {/* ── 3. FLOATING AI TACTICAL EXPLAINABILITY PANEL (TOP RIGHT) ────────── */}
       {explainabilityOpen && (
-        <div className="self-end mt-2 bg-slate-950/95 backdrop-blur-xl border border-cyan-500/40 p-3 rounded-xl shadow-2xl text-xs space-y-2 max-w-sm pointer-events-auto animate-in slide-in-from-right">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-1 text-cyan-400 font-bold text-[10px]">
+        <div className="self-end mt-2 bg-slate-950/95 backdrop-blur-xl border border-slate-800/90 p-3 rounded-xl shadow-2xl text-xs space-y-2 max-w-sm pointer-events-auto animate-in slide-in-from-right">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-1 text-slate-300 font-bold text-[10px]">
             <span className="flex items-center gap-1">
-              <Brain className="w-3.5 h-3.5 text-cyan-400" />
-              AI TACTICAL DECISION INTELLIGENCE
+              <Brain className="w-3.5 h-3.5 text-sky-400" />
+              Tactical Incident Summary
             </span>
-            <span className="text-emerald-400">CONFIDENCE: 98.4%</span>
+            <span className="text-emerald-400">MODEL ACCURACY: 98.4%</span>
           </div>
 
           <div className="space-y-1.5 text-[9px]">

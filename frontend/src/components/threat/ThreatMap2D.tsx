@@ -238,6 +238,8 @@ export const ThreatMap2D: React.FC<ThreatMap2DProps> = ({
     `);
   }, [threatData, facilityLat, facilityLon]);
 
+  const [showLegend, setShowLegend] = React.useState(false);
+
   return (
     <div className="w-full h-full relative select-none">
       {/* Map Container */}
@@ -264,33 +266,52 @@ export const ThreatMap2D: React.FC<ThreatMap2DProps> = ({
         </span>
       </div>
 
-      {/* Legend — bottom-left overlay */}
+      {/* Collapsible Legend Overlay — bottom-left */}
       {threatData && (
-        <div
-          className="absolute bottom-10 left-2 z-[1000] bg-slate-950/90 backdrop-blur border border-slate-700 rounded-xl p-2.5 text-[10px] font-mono space-y-1.5 pointer-events-none"
-          style={{ minWidth: 180 }}
-        >
-          <div className="text-cyan-400 font-bold uppercase tracking-wider text-[9px] mb-1">
-            Hazard Zone Legend
-          </div>
-          {[...ZONE_STYLES].reverse().map(({ key, color, label }) => {
-            const band = threatData.threat_bands[key];
-            return (
-              <div key={key} className="flex items-center gap-2">
-                <div
-                  className="w-3 h-3 rounded-sm flex-shrink-0"
-                  style={{ background: color, opacity: 0.85 }}
-                />
-                <div className="text-gray-200">
-                  <span className="font-semibold">{label}</span>
-                  <span className="text-gray-400 ml-1">({band?.max_radius_m ?? '—'} m)</span>
-                </div>
+        <div className="absolute bottom-6 left-3 z-[1000] pointer-events-auto">
+          {showLegend ? (
+            <div
+              className="bg-slate-950/95 backdrop-blur-md border border-slate-700/80 rounded-2xl p-3 text-[10px] font-mono space-y-1.5 shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-150"
+              style={{ minWidth: 200 }}
+            >
+              <div className="flex items-center justify-between border-b border-slate-800 pb-1 mb-1">
+                <span className="text-cyan-400 font-bold uppercase tracking-wider text-[9px]">
+                  Hazard Zone Legend
+                </span>
+                <button
+                  onClick={() => setShowLegend(false)}
+                  className="text-gray-400 hover:text-white text-xs px-1"
+                >
+                  ✕
+                </button>
               </div>
-            );
-          })}
-          <div className="pt-1 border-t border-slate-700 text-gray-400 text-[9px]">
-            Click map to relocate facility
-          </div>
+              {[...ZONE_STYLES].reverse().map(({ key, color, label }) => {
+                const band = threatData.threat_bands[key];
+                return (
+                  <div key={key} className="flex items-center gap-2">
+                    <div
+                      className="w-3 h-3 rounded-sm flex-shrink-0"
+                      style={{ background: color, opacity: 0.85 }}
+                    />
+                    <div className="text-gray-200">
+                      <span className="font-semibold">{label}</span>
+                      <span className="text-gray-400 ml-1">({band?.max_radius_m ?? '—'} m)</span>
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="pt-1 border-t border-slate-800 text-gray-400 text-[9px]">
+                Click map to relocate facility
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowLegend(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-950/90 hover:bg-slate-900 border border-slate-700/80 text-gray-300 rounded-xl text-[10px] font-mono font-bold shadow-xl backdrop-blur-md transition-all hover:scale-105"
+            >
+              <span>🎨 HAZARD LEGEND</span>
+            </button>
+          )}
         </div>
       )}
     </div>
