@@ -16,13 +16,19 @@ import {
   Download,
   ChevronUp,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Sliders,
+  Activity,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 
-// ── Default facility presets (blueprint Section 5) ───────────────────────
+// ── Default facility presets ───────────────────────────────────────────────
 const FACILITY_A_DEFAULTS: Partial<ThreatCalculateParams> = {
   facility_type: 'FACILITY_A_LPG',
   mass_kg: 40000,
-  tank_diameter_m: 12,
+  tank_diameter_m: 14,
   tank_volume_m3: 80,
   fill_fraction: 0.85,
   fuel_type: 'LPG',
@@ -32,7 +38,7 @@ const FACILITY_A_DEFAULTS: Partial<ThreatCalculateParams> = {
 
 const FACILITY_B_DEFAULTS: Partial<ThreatCalculateParams> = {
   facility_type: 'FACILITY_B_POOL_FIRE',
-  pool_diameter_m: 20,
+  pool_diameter_m: 24,
   tank_diameter_m: 20,
   tank_volume_m3: 150,
   fill_fraction: 0.70,
@@ -46,8 +52,8 @@ const INITIAL_PARAMS: ThreatCalculateParams = {
   wind_speed_ms: 8.5,
   wind_direction_deg: 135,
   mass_kg: 40000,
-  pool_diameter_m: 20,
-  tank_diameter_m: 12,
+  pool_diameter_m: 24,
+  tank_diameter_m: 14,
   tank_volume_m3: 80,
   fill_fraction: 0.85,
   fuel_type: 'LPG',
@@ -65,10 +71,26 @@ export const CommandCenterPage: React.FC = () => {
   const [mobileTelemetryOpen, setMobileTelemetryOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
 
+  // Desktop Collapsible Panels State
+  const [leftDockOpen, setLeftDockOpen] = useState(true);
+  const [rightPanelOpen, setRightPanelOpen] = useState(true);
+  const [isImmersive3D, setIsImmersive3D] = useState(false);
+
   // Shared Leaflet map reference for Export PNG
   const mapRef = useRef<any>(null);
 
-  // ── Compute threat zones on every params change ─────────────────────────
+  // ESC key exits immersive mode
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isImmersive3D) {
+        setIsImmersive3D(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isImmersive3D]);
+
+  // Compute threat zones on parameter change
   useEffect(() => {
     let isMounted = true;
     setLoading(true);
@@ -83,22 +105,21 @@ export const CommandCenterPage: React.FC = () => {
         console.error('Threat calculation failed:', err);
         if (isMounted) setLoading(false);
       });
-    return () => { isMounted = false; };
+    return () => {
+      isMounted = false;
+    };
   }, [params]);
 
-  // ── Facility preset selectors ────────────────────────────────────────────
   const handleSelectFacilityA = () =>
     setParams((prev) => ({ ...prev, ...FACILITY_A_DEFAULTS }));
 
   const handleSelectFacilityB = () =>
     setParams((prev) => ({ ...prev, ...FACILITY_B_DEFAULTS }));
 
-  // ── Click-to-move facility from map ─────────────────────────────────────
   const handleFacilityMove = useCallback((lat: number, lon: number) => {
     setParams((prev) => ({ ...prev, latitude: lat, longitude: lon }));
   }, []);
 
-  // ── Export PNG using Leaflet canvas ─────────────────────────────────────
   const handleExportPNG = useCallback(() => {
     const map = mapRef.current;
     if (!map) {
@@ -107,10 +128,7 @@ export const CommandCenterPage: React.FC = () => {
     }
     setExporting(true);
 
-    // Use html2canvas approach via leaflet's internal canvas renderer
-    // Leaflet renders to a canvas tile layer — we compose manually
     try {
-      // Build a composite canvas
       const container = map.getContainer() as HTMLElement;
       const w = container.clientWidth;
       const h = container.clientHeight;
@@ -120,17 +138,13 @@ export const CommandCenterPage: React.FC = () => {
       finalCanvas.height = h;
       const ctx = finalCanvas.getContext('2d')!;
 
-      // Draw all map tile canvases
       const canvases = container.querySelectorAll('canvas');
       canvases.forEach((c) => {
         try {
           ctx.drawImage(c, 0, 0);
-        } catch {
-          /* cross-origin tiles may fail */
-        }
+        } catch {}
       });
 
-      // Draw semi-transparent legend overlay
       const legendPad = 12;
       const legendX = legendPad;
       const legendY = h - 200;
@@ -167,16 +181,11 @@ export const CommandCenterPage: React.FC = () => {
         ctx.fillText(`Wind: ${params.wind_speed_ms} m/s @ ${params.wind_direction_deg}°`, legendX + 10, legendY + 148);
       }
 
-      // Title bar
       ctx.fillStyle = 'rgba(9,13,22,0.90)';
       ctx.fillRect(0, 0, w, 36);
       ctx.font = 'bold 12px monospace';
       ctx.fillStyle = '#f1f5f9';
-      ctx.fillText(
-        `RESQ-AI — DER-02 Threat Zone | ${threatData?.facility_name ?? ''}`,
-        12,
-        22
-      );
+      ctx.fillText(`RESQ-AI — DER-02 Threat Zone | ${threatData?.facility_name ?? ''}`, 12, 22);
       ctx.font = '10px monospace';
       ctx.fillStyle = '#94a3b8';
       ctx.fillText(
@@ -186,7 +195,10 @@ export const CommandCenterPage: React.FC = () => {
       );
 
       finalCanvas.toBlob((blob) => {
-        if (!blob) { setExporting(false); return; }
+        if (!blob) {
+          setExporting(false);
+          return;
+        }
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -205,82 +217,118 @@ export const CommandCenterPage: React.FC = () => {
 
   return (
     <div className="w-screen h-screen flex flex-col bg-slate-950 text-gray-100 overflow-hidden font-sans select-none">
-      {/* ── Top Command Header ─────────────────────────────────────────── */}
-      <header className="h-14 bg-slate-950/90 backdrop-blur-xl border-b border-slate-800 px-4 flex items-center justify-between z-[1000] shrink-0">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="p-2 rounded-lg bg-red-950 border border-red-600/50 shrink-0">
-            <ShieldAlert className="w-5 h-5 text-red-400 animate-pulse" />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-sm font-bold tracking-wider text-gray-100 font-mono uppercase truncate">
-                RESQ-AI — DER-02 THREAT-ZONE
-              </h1>
-              <span className="text-[10px] bg-red-950 text-red-300 border border-red-700 px-2 py-0.5 rounded font-bold font-mono hidden sm:inline">
-                PHYSICAL HAZARD MODE
-              </span>
+      {/* ── Top Command Header (Hidden when Immersive 3D is active) ────── */}
+      {!isImmersive3D && (
+        <header className="h-14 bg-slate-950/90 backdrop-blur-xl border-b border-slate-800 px-4 flex items-center justify-between z-[1000] shrink-0 transition-all">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="p-2 rounded-lg bg-red-950 border border-red-600/50 shrink-0">
+              <ShieldAlert className="w-5 h-5 text-red-400 animate-pulse" />
             </div>
-            <div className="text-[11px] text-gray-400 font-mono truncate hidden sm:block">
-              Industrial Fire &amp; Explosion | Chennai Petrochem Complex
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-sm font-bold tracking-wider text-gray-100 font-mono uppercase truncate">
+                  RESQ-AI — DER-02 THREAT-ZONE
+                </h1>
+                <span className="text-[10px] bg-red-950 text-red-300 border border-red-700 px-2 py-0.5 rounded font-bold font-mono hidden sm:inline">
+                  PHYSICAL HAZARD MODE
+                </span>
+              </div>
+              <div className="text-[11px] text-gray-400 font-mono truncate hidden sm:block">
+                Industrial Fire &amp; Explosion | Chennai Petrochem Complex
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Header Right Controls */}
-        <div className="flex items-center gap-2 font-mono shrink-0">
-          {/* View switcher */}
-          <div className="hidden sm:flex items-center bg-slate-900 border border-slate-800 rounded-lg p-1 gap-1 text-xs">
+          {/* Header Right Controls */}
+          <div className="flex items-center gap-2 font-mono shrink-0">
+            {/* View switcher */}
+            <div className="hidden sm:flex items-center bg-slate-900 border border-slate-800 rounded-lg p-1 gap-1 text-xs">
+              <button
+                onClick={() => {
+                  setViewMode('2D_MAP');
+                  setIsImmersive3D(false);
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded transition-colors ${
+                  viewMode === '2D_MAP'
+                    ? 'bg-cyan-500 text-slate-950 font-bold'
+                    : 'text-slate-400 hover:text-gray-200'
+                }`}
+              >
+                <Map className="w-3.5 h-3.5" />
+                <span>2D MAP</span>
+              </button>
+              <button
+                onClick={() => setViewMode('3D_DIGITAL_TWIN')}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded transition-colors ${
+                  viewMode === '3D_DIGITAL_TWIN'
+                    ? 'bg-cyan-500 text-slate-950 font-bold'
+                    : 'text-slate-400 hover:text-gray-200'
+                }`}
+              >
+                <Box className="w-3.5 h-3.5" />
+                <span>3D TWIN</span>
+              </button>
+            </div>
+
+            {/* Export PNG button */}
             <button
-              onClick={() => setViewMode('2D_MAP')}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded transition-colors ${
-                viewMode === '2D_MAP'
-                  ? 'bg-cyan-500 text-slate-950 font-bold'
-                  : 'text-slate-400 hover:text-gray-200'
-              }`}
+              onClick={handleExportPNG}
+              disabled={exporting || viewMode !== '2D_MAP'}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed border border-slate-700 rounded-lg text-xs text-gray-200 font-bold transition-all"
+              title="Export map as PNG incident report"
             >
-              <Map className="w-3.5 h-3.5" />
-              <span>2D MAP</span>
-            </button>
-            <button
-              onClick={() => setViewMode('3D_DIGITAL_TWIN')}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded transition-colors ${
-                viewMode === '3D_DIGITAL_TWIN'
-                  ? 'bg-cyan-500 text-slate-950 font-bold'
-                  : 'text-slate-400 hover:text-gray-200'
-              }`}
-            >
-              <Box className="w-3.5 h-3.5" />
-              <span>3D TWIN</span>
+              <Download className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">{exporting ? 'Exporting…' : 'Export PNG'}</span>
             </button>
           </div>
+        </header>
+      )}
 
-          {/* Export PNG button */}
-          <button
-            onClick={handleExportPNG}
-            disabled={exporting || viewMode !== '2D_MAP'}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed border border-slate-700 rounded-lg text-xs text-gray-200 font-bold transition-all"
-            title="Export map as PNG incident report"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">{exporting ? 'Exporting…' : 'Export PNG'}</span>
-          </button>
-        </div>
-      </header>
-
-      {/* ── Main Body (Desktop: 3-column | Mobile: stack) ─────────────── */}
-      <div className="flex-1 relative overflow-hidden">
+      {/* ── Main Body ─────────────────────────────────────────────────── */}
+      <div className="flex-1 relative overflow-hidden flex">
         {/* ─ Desktop layout ─ */}
-        <div className="hidden md:flex w-full h-full">
-          {/* Left Control Dock */}
-          <ThreatControlDock
-            params={params}
-            onChangeParams={setParams}
-            onSelectFacilityA={handleSelectFacilityA}
-            onSelectFacilityB={handleSelectFacilityB}
-          />
+        <div className="hidden md:flex w-full h-full relative">
+          {/* Left Control Dock (Collapsible) */}
+          {!isImmersive3D && (
+            <div
+              className={`relative transition-all duration-300 shrink-0 flex ${
+                leftDockOpen ? 'w-80' : 'w-12'
+              }`}
+            >
+              {leftDockOpen ? (
+                <div className="w-80 h-full relative overflow-hidden">
+                  <ThreatControlDock
+                    params={params}
+                    onChangeParams={setParams}
+                    onSelectFacilityA={handleSelectFacilityA}
+                    onSelectFacilityB={handleSelectFacilityB}
+                  />
+                  <button
+                    onClick={() => setLeftDockOpen(false)}
+                    title="Collapse Controls"
+                    className="absolute top-3 right-2 z-[600] p-1 bg-slate-900 border border-slate-700 rounded-lg text-gray-400 hover:text-white"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <div
+                  onClick={() => setLeftDockOpen(true)}
+                  title="Expand Control Dock"
+                  className="w-12 h-full bg-slate-950 border-r border-slate-800 flex flex-col items-center py-4 cursor-pointer hover:bg-slate-900 transition-colors z-[500]"
+                >
+                  <Sliders className="w-5 h-5 text-cyan-400 mb-4" />
+                  <span className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-widest rotate-90 whitespace-nowrap mt-8">
+                    CONTROLS
+                  </span>
+                  <ChevronRight className="w-4 h-4 text-gray-400 mt-auto" />
+                </div>
+              )}
+            </div>
+          )}
 
-          {/* Centre Map / 3D Viewport */}
-          <div className="flex-1 relative bg-slate-900">
+          {/* Centre Map / 3D Viewport (Dynamically Expands) */}
+          <div className="flex-1 relative bg-slate-900 overflow-hidden">
             {viewMode === '2D_MAP' ? (
               <ThreatMap2D
                 threatData={threatData}
@@ -292,7 +340,13 @@ export const CommandCenterPage: React.FC = () => {
             ) : (
               <ThreatDigitalTwin3D
                 threatData={threatData}
-                onExit3D={() => setViewMode('2D_MAP')}
+                params={params}
+                isImmersive={isImmersive3D}
+                onToggleImmersive={() => setIsImmersive3D((v) => !v)}
+                onExit3D={() => {
+                  setViewMode('2D_MAP');
+                  setIsImmersive3D(false);
+                }}
               />
             )}
 
@@ -305,31 +359,70 @@ export const CommandCenterPage: React.FC = () => {
             )}
           </div>
 
-          {/* Right Telemetry Panel */}
-          <ThreatTelemetryPanel threatData={threatData} />
+          {/* Right Telemetry Panel (Collapsible) */}
+          {!isImmersive3D && (
+            <div
+              className={`relative transition-all duration-300 shrink-0 flex ${
+                rightPanelOpen ? 'w-88' : 'w-12'
+              }`}
+            >
+              {rightPanelOpen ? (
+                <div className="w-88 h-full relative overflow-hidden">
+                  <ThreatTelemetryPanel threatData={threatData} />
+                  <button
+                    onClick={() => setRightPanelOpen(false)}
+                    title="Collapse Telemetry"
+                    className="absolute top-3 left-2 z-[600] p-1 bg-slate-900 border border-slate-700 rounded-lg text-gray-400 hover:text-white"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <div
+                  onClick={() => setRightPanelOpen(true)}
+                  title="Expand Telemetry Panel"
+                  className="w-12 h-full bg-slate-950 border-l border-slate-800 flex flex-col items-center py-4 cursor-pointer hover:bg-slate-900 transition-colors z-[500]"
+                >
+                  <Activity className="w-5 h-5 text-cyan-400 mb-4" />
+                  <span className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-widest rotate-90 whitespace-nowrap mt-8">
+                    TELEMETRY
+                  </span>
+                  <ChevronLeft className="w-4 h-4 text-gray-400 mt-auto" />
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ─ Mobile layout (< 768px) ─ */}
         <div className="flex md:hidden w-full h-full flex-col">
-          {/* Mobile view switcher bar */}
           <div className="h-10 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-3 gap-2 shrink-0 z-[600]">
             <div className="flex items-center gap-1 text-xs">
               <button
                 onClick={() => setViewMode('2D_MAP')}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded transition-colors ${viewMode === '2D_MAP' ? 'bg-cyan-500 text-slate-950 font-bold' : 'text-slate-400'}`}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded transition-colors ${
+                  viewMode === '2D_MAP' ? 'bg-cyan-500 text-slate-950 font-bold' : 'text-slate-400'
+                }`}
               >
-                <Map className="w-3.5 h-3.5" /><span>MAP</span>
+                <Map className="w-3.5 h-3.5" />
+                <span>MAP</span>
               </button>
               <button
                 onClick={() => setViewMode('3D_DIGITAL_TWIN')}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded transition-colors ${viewMode === '3D_DIGITAL_TWIN' ? 'bg-cyan-500 text-slate-950 font-bold' : 'text-slate-400'}`}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded transition-colors ${
+                  viewMode === '3D_DIGITAL_TWIN' ? 'bg-cyan-500 text-slate-950 font-bold' : 'text-slate-400'
+                }`}
               >
-                <Box className="w-3.5 h-3.5" /><span>3D</span>
+                <Box className="w-3.5 h-3.5" />
+                <span>3D</span>
               </button>
             </div>
             <div className="flex items-center gap-1">
               <button
-                onClick={() => { setMobileTelemetryOpen((v) => !v); setMobileDrawerOpen(false); }}
+                onClick={() => {
+                  setMobileTelemetryOpen((v) => !v);
+                  setMobileDrawerOpen(false);
+                }}
                 className="text-[10px] px-2 py-1 bg-slate-800 border border-slate-700 rounded text-cyan-300 font-mono"
               >
                 TELEMETRY
@@ -344,16 +437,16 @@ export const CommandCenterPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Map fills middle */}
           <div
             className="relative bg-slate-900 transition-all duration-300"
             style={{ flex: 1, minHeight: 0, bottom: mobileDrawerOpen ? '40vh' : 0 }}
           >
-            {/* Telemetry overlay on mobile */}
             {mobileTelemetryOpen && (
               <div className="absolute inset-0 z-[700] overflow-y-auto bg-slate-950/98 backdrop-blur-xl">
                 <div className="flex justify-end p-2">
-                  <button onClick={() => setMobileTelemetryOpen(false)} className="text-xs text-gray-400 underline">Close</button>
+                  <button onClick={() => setMobileTelemetryOpen(false)} className="text-xs text-gray-400 underline">
+                    Close
+                  </button>
                 </div>
                 <ThreatTelemetryPanel threatData={threatData} />
               </div>
@@ -370,6 +463,7 @@ export const CommandCenterPage: React.FC = () => {
             ) : (
               <ThreatDigitalTwin3D
                 threatData={threatData}
+                params={params}
                 onExit3D={() => setViewMode('2D_MAP')}
               />
             )}
@@ -382,10 +476,12 @@ export const CommandCenterPage: React.FC = () => {
             )}
           </div>
 
-          {/* Bottom drawer toggle bar */}
           <div
             className="h-10 bg-slate-900 border-t border-slate-800 flex items-center justify-between px-4 cursor-pointer shrink-0 z-[600]"
-            onClick={() => { setMobileDrawerOpen((v) => !v); setMobileTelemetryOpen(false); }}
+            onClick={() => {
+              setMobileDrawerOpen((v) => !v);
+              setMobileTelemetryOpen(false);
+            }}
           >
             <span className="text-xs font-mono text-gray-300 font-bold uppercase tracking-wider">
               ⚙ Control Panel
@@ -395,7 +491,6 @@ export const CommandCenterPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Bottom drawer (40vh) */}
           <div
             className="bg-slate-950 border-t border-slate-800 overflow-y-auto z-[650] transition-all duration-300 shrink-0"
             style={{ height: mobileDrawerOpen ? '40vh' : 0, overflow: mobileDrawerOpen ? 'auto' : 'hidden' }}
