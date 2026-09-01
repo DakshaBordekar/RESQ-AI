@@ -1,5 +1,5 @@
 import React, { useRef, useCallback } from 'react';
-import { Flame, Wind, Gauge, Compass, FlaskConical, Layers3 } from 'lucide-react';
+import { Flame, Wind, Gauge, Compass, FlaskConical, Layers3, Sliders } from 'lucide-react';
 import { ThreatCalculateParams, SUBSTANCE_PRESETS } from '../../services/threatApi';
 
 interface ThreatControlDockProps {
@@ -7,6 +7,7 @@ interface ThreatControlDockProps {
   onChangeParams: (newParams: ThreatCalculateParams) => void;
   onSelectFacilityA: () => void;
   onSelectFacilityB: () => void;
+  onClose?: () => void;
 }
 
 // ── SVG Wind Rose Widget ───────────────────────────────────────────────────
@@ -255,19 +256,11 @@ export const ThreatControlDock: React.FC<ThreatControlDockProps> = ({
   onChangeParams,
   onSelectFacilityA,
   onSelectFacilityB,
+  onClose,
 }) => {
   const isFacilityA = params.facility_type === 'FACILITY_A_LPG';
 
-  const [openSections, setOpenSections] = React.useState({
-    facility: true,
-    geometry: true,
-    wind: true,
-    thresholds: false,
-  });
-
-  const toggleSection = (key: keyof typeof openSections) => {
-    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
+  const [activeTab, setActiveTab] = React.useState<'FACILITY' | 'GEOMETRY' | 'WIND'>('FACILITY');
 
   const set = (partial: Partial<ThreatCalculateParams>) =>
     onChangeParams({ ...params, ...partial });
@@ -286,269 +279,251 @@ export const ThreatControlDock: React.FC<ThreatControlDockProps> = ({
     <div
       className="
         threat-control-dock
-        w-80 bg-slate-950/95 backdrop-blur-xl border-r border-slate-800
-        p-3 text-gray-100 font-mono flex flex-col gap-3 overflow-y-auto z-[500]
+        w-80 bg-slate-950/95 backdrop-blur-xl border border-slate-800/90 rounded-2xl shadow-2xl
+        p-3.5 text-gray-100 font-mono flex flex-col gap-3 overflow-hidden select-none
       "
     >
-      {/* ── Section 1: Facility & Substance ────────────────────────────── */}
-      <div className="border border-slate-800/90 rounded-xl bg-slate-900/40 overflow-hidden">
-        <button
-          type="button"
-          onClick={() => toggleSection('facility')}
-          className="w-full flex items-center justify-between p-2.5 bg-slate-900/80 hover:bg-slate-900 text-left transition-colors"
-        >
-          <div className="flex items-center gap-2">
-            <Flame className="w-4 h-4 text-red-400" />
-            <span className="text-[11px] text-gray-200 font-bold uppercase tracking-wider">
-              1. Facility & Substance
-            </span>
+      {/* Header Bar */}
+      <div className="flex items-center justify-between border-b border-slate-800/90 pb-2">
+        <div className="flex items-center gap-2">
+          <div className="p-1 rounded bg-cyan-950 border border-cyan-500/40 text-cyan-400">
+            <Sliders className="w-3.5 h-3.5" />
           </div>
-          <span className="text-gray-400 text-xs">{openSections.facility ? '▼' : '▶'}</span>
-        </button>
-
-        {openSections.facility && (
-          <div className="p-3 flex flex-col gap-2.5 border-t border-slate-800/80">
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={onSelectFacilityA}
-                className={`flex flex-col gap-1 p-2 rounded-lg border text-left transition-all ${
-                  isFacilityA
-                    ? 'bg-red-950/80 border-red-500 text-red-100 font-bold ring-1 ring-red-500/50'
-                    : 'bg-slate-900 border-slate-800 text-gray-400 hover:text-gray-200'
-                }`}
-              >
-                <div className="text-xs font-semibold flex items-center gap-1">
-                  <Flame className="w-3.5 h-3.5 text-red-400" />
-                  Facility A
-                </div>
-                <div className="text-[9px] opacity-75 leading-tight">LPG BLEVE Fireball</div>
-              </button>
-
-              <button
-                onClick={onSelectFacilityB}
-                className={`flex flex-col gap-1 p-2 rounded-lg border text-left transition-all ${
-                  !isFacilityA
-                    ? 'bg-amber-950/80 border-amber-500 text-amber-100 font-bold ring-1 ring-amber-500/50'
-                    : 'bg-slate-900 border-slate-800 text-gray-400 hover:text-gray-200'
-                }`}
-              >
-                <div className="text-xs font-semibold flex items-center gap-1">
-                  <Flame className="w-3.5 h-3.5 text-amber-400" />
-                  Facility B
-                </div>
-                <div className="text-[9px] opacity-75 leading-tight">Pool Fire</div>
-              </button>
-            </div>
-
-            <div className="flex flex-col gap-1 pt-1">
-              <label className="text-[10px] text-purple-400 font-bold uppercase tracking-wider flex items-center gap-1">
-                <FlaskConical className="w-3 h-3" />
-                Stored Chemical Compound
-              </label>
-              <select
-                value={params.fuel_type}
-                onChange={(e) => handleSubstanceChange(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-purple-500 cursor-pointer"
-              >
-                {Object.entries(SUBSTANCE_PRESETS).map(([key, preset]) => (
-                  <option key={key} value={key}>
-                    {preset.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
+          <span className="text-xs font-bold text-gray-100 uppercase tracking-wider">
+            SCENARIO CONTROLS
+          </span>
+        </div>
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="p-1 rounded-lg text-gray-400 hover:text-white hover:bg-slate-800 transition-colors"
+            title="Collapse Controls"
+          >
+            ✕
+          </button>
         )}
       </div>
 
-      {/* ── Section 2: Storage Geometry & Fuel Load ─────────────────────── */}
-      <div className="border border-slate-800/90 rounded-xl bg-slate-900/40 overflow-hidden">
+      {/* 3-Tab Selector Pill */}
+      <div className="grid grid-cols-3 gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800 text-[10px]">
         <button
-          type="button"
-          onClick={() => toggleSection('geometry')}
-          className="w-full flex items-center justify-between p-2.5 bg-slate-900/80 hover:bg-slate-900 text-left transition-colors"
+          onClick={() => setActiveTab('FACILITY')}
+          className={`py-1.5 rounded-lg font-bold transition-all flex items-center justify-center gap-1 ${
+            activeTab === 'FACILITY'
+              ? 'bg-cyan-500 text-slate-950 shadow'
+              : 'text-gray-400 hover:text-gray-200'
+          }`}
         >
-          <div className="flex items-center gap-2">
-            <Gauge className="w-4 h-4 text-cyan-400" />
-            <span className="text-[11px] text-gray-200 font-bold uppercase tracking-wider">
-              2. Geometry & Fuel Load
-            </span>
-          </div>
-          <span className="text-gray-400 text-xs">{openSections.geometry ? '▼' : '▶'}</span>
+          <Flame className="w-3 h-3" />
+          FACILITY
         </button>
-
-        {openSections.geometry && (
-          <div className="p-3 flex flex-col gap-2.5 border-t border-slate-800/80">
-            {isFacilityA ? (
-              <>
-                <NumericStepperSlider
-                  label="Tank Diameter"
-                  value={params.tank_diameter_m}
-                  min={2}
-                  max={30}
-                  step={0.5}
-                  unit="m"
-                  color="red"
-                  onChange={(v) => set({ tank_diameter_m: v })}
-                />
-                <NumericStepperSlider
-                  label="Tank Volume"
-                  value={params.tank_volume_m3}
-                  min={10}
-                  max={500}
-                  step={10}
-                  unit="m³"
-                  color="red"
-                  onChange={(v) => {
-                    const rho = 500;
-                    const mass = rho * v * (params.fill_fraction ?? 0.85);
-                    set({ tank_volume_m3: v, mass_kg: Math.round(mass) });
-                  }}
-                />
-                <NumericStepperSlider
-                  label="Fill Fraction"
-                  value={params.fill_fraction ?? 0.85}
-                  min={0.1}
-                  max={0.95}
-                  step={0.05}
-                  unit=""
-                  color="red"
-                  onChange={(v) => {
-                    const mass = 500 * params.tank_volume_m3 * v;
-                    set({ fill_fraction: v, mass_kg: Math.round(mass) });
-                  }}
-                />
-                <div className="bg-slate-900/90 border border-slate-800 p-2 rounded flex justify-between items-center text-xs">
-                  <span className="text-gray-400 text-[10px]">Calculated Mass:</span>
-                  <span className="text-red-400 font-bold font-mono">{params.mass_kg.toLocaleString()} kg</span>
-                </div>
-              </>
-            ) : (
-              <>
-                <NumericStepperSlider
-                  label="Pool Diameter D"
-                  value={params.pool_diameter_m}
-                  min={5}
-                  max={80}
-                  step={1}
-                  unit="m"
-                  color="amber"
-                  onChange={(v) => set({ pool_diameter_m: v })}
-                />
-                <NumericStepperSlider
-                  label="Tank Volume"
-                  value={params.tank_volume_m3}
-                  min={10}
-                  max={500}
-                  step={10}
-                  unit="m³"
-                  color="amber"
-                  onChange={(v) => set({ tank_volume_m3: v })}
-                />
-                <NumericStepperSlider
-                  label="Fill Fraction"
-                  value={params.fill_fraction ?? 0.70}
-                  min={0.1}
-                  max={0.95}
-                  step={0.05}
-                  unit=""
-                  color="amber"
-                  onChange={(v) => set({ fill_fraction: v })}
-                />
-              </>
-            )}
-          </div>
-        )}
+        <button
+          onClick={() => setActiveTab('GEOMETRY')}
+          className={`py-1.5 rounded-lg font-bold transition-all flex items-center justify-center gap-1 ${
+            activeTab === 'GEOMETRY'
+              ? 'bg-cyan-500 text-slate-950 shadow'
+              : 'text-gray-400 hover:text-gray-200'
+          }`}
+        >
+          <Gauge className="w-3 h-3" />
+          GEOMETRY
+        </button>
+        <button
+          onClick={() => setActiveTab('WIND')}
+          className={`py-1.5 rounded-lg font-bold transition-all flex items-center justify-center gap-1 ${
+            activeTab === 'WIND'
+              ? 'bg-cyan-500 text-slate-950 shadow'
+              : 'text-gray-400 hover:text-gray-200'
+          }`}
+        >
+          <Wind className="w-3 h-3" />
+          WIND
+        </button>
       </div>
 
-      {/* ── Section 3: Wind & Meteorology ───────────────────────────────── */}
-      <div className="border border-slate-800/90 rounded-xl bg-slate-900/40 overflow-hidden">
-        <button
-          type="button"
-          onClick={() => toggleSection('wind')}
-          className="w-full flex items-center justify-between p-2.5 bg-slate-900/80 hover:bg-slate-900 text-left transition-colors"
-        >
-          <div className="flex items-center gap-2">
-            <Wind className="w-4 h-4 text-cyan-400" />
-            <span className="text-[11px] text-gray-200 font-bold uppercase tracking-wider">
-              3. Wind & Meteorology
-            </span>
-          </div>
-          <span className="text-gray-400 text-xs">{openSections.wind ? '▼' : '▶'}</span>
-        </button>
-
-        {openSections.wind && (
-          <div className="p-3 flex flex-col gap-2.5 border-t border-slate-800/80">
-            <div className="flex justify-center py-1">
-              <WindRose
-                bearing={params.wind_direction_deg}
-                onChange={(deg) => set({ wind_direction_deg: deg })}
-              />
-            </div>
-
-            <NumericStepperSlider
-              label="Wind Speed"
-              value={params.wind_speed_ms}
-              min={0}
-              max={30}
-              step={0.5}
-              unit="m/s"
-              color="cyan"
-              onChange={(v) => set({ wind_speed_ms: v })}
-            />
-
-            <NumericStepperSlider
-              label="Wind Bearing (Precise)"
-              value={params.wind_direction_deg}
-              min={0}
-              max={360}
-              step={1}
-              unit="°"
-              color="cyan"
-              onChange={(v) => set({ wind_direction_deg: v })}
-            />
-          </div>
-        )}
-      </div>
-
-      {/* ── Section 4: Zone Threshold Reference ─────────────────────────── */}
-      <div className="border border-slate-800/90 rounded-xl bg-slate-900/40 overflow-hidden">
-        <button
-          type="button"
-          onClick={() => toggleSection('thresholds')}
-          className="w-full flex items-center justify-between p-2.5 bg-slate-900/80 hover:bg-slate-900 text-left transition-colors"
-        >
-          <div className="flex items-center gap-2">
-            <Layers3 className="w-4 h-4 text-amber-400" />
-            <span className="text-[11px] text-gray-200 font-bold uppercase tracking-wider">
-              4. Zone Threshold Tiers
-            </span>
-          </div>
-          <span className="text-gray-400 text-xs">{openSections.thresholds ? '▼' : '▶'}</span>
-        </button>
-
-        {openSections.thresholds && (
-          <div className="p-3 border-t border-slate-800/80 space-y-2">
-            {[
-              { color: '#ef4444', label: 'Zone 1 — Lethal', val: '> 37.5 kW/m² | Extreme Hazard' },
-              { color: '#f97316', label: 'Zone 2 — Serious', val: '12.5–37.5 kW/m² | Evacuate' },
-              { color: '#eab308', label: 'Zone 3 — Injury', val: '4.7–12.5 kW/m² | First Aid Limit' },
-              { color: '#22c55e', label: 'Zone 4 — Awareness', val: '1.6–4.7 kW/m² | Staging Line' },
-            ].map(({ color, label, val }) => (
-              <div key={label} className="flex items-start gap-2 text-[10px]">
-                <div
-                  className="w-2.5 h-2.5 rounded-sm mt-0.5 shrink-0"
-                  style={{ background: color }}
-                />
-                <div>
-                  <div className="text-gray-300 font-semibold">{label}</div>
-                  <div className="text-gray-500">{val}</div>
-                </div>
+      {/* ── TAB 1: FACILITY & SUBSTANCE ──────────────────────────────────── */}
+      {activeTab === 'FACILITY' && (
+        <div className="space-y-3 pt-1">
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={onSelectFacilityA}
+              className={`flex flex-col gap-1 p-2.5 rounded-xl border text-left transition-all ${
+                isFacilityA
+                  ? 'bg-red-950/80 border-red-500 text-red-100 font-bold ring-1 ring-red-500/50 shadow-lg'
+                  : 'bg-slate-900 border-slate-800 text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              <div className="text-xs font-semibold flex items-center gap-1">
+                <Flame className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                Facility A
               </div>
-            ))}
+              <div className="text-[9px] opacity-75 leading-tight">LPG BLEVE Fireball</div>
+            </button>
+
+            <button
+              onClick={onSelectFacilityB}
+              className={`flex flex-col gap-1 p-2.5 rounded-xl border text-left transition-all ${
+                !isFacilityA
+                  ? 'bg-amber-950/80 border-amber-500 text-amber-100 font-bold ring-1 ring-amber-500/50 shadow-lg'
+                  : 'bg-slate-900 border-slate-800 text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              <div className="text-xs font-semibold flex items-center gap-1">
+                <Flame className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                Facility B
+              </div>
+              <div className="text-[9px] opacity-75 leading-tight">Pool Fire Plume</div>
+            </button>
           </div>
-        )}
-      </div>
+
+          <div className="flex flex-col gap-1.5 pt-1">
+            <label className="text-[10px] text-purple-400 font-bold uppercase tracking-wider flex items-center gap-1">
+              <FlaskConical className="w-3.5 h-3.5" />
+              Stored Chemical Compound
+            </label>
+            <select
+              value={params.fuel_type}
+              onChange={(e) => handleSubstanceChange(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-gray-200 font-mono focus:outline-none focus:border-purple-500 cursor-pointer"
+            >
+              {Object.entries(SUBSTANCE_PRESETS).map(([key, preset]) => (
+                <option key={key} value={key}>
+                  {preset.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Active Threshold Quick View */}
+          <div className="bg-slate-900/80 border border-slate-800 p-2.5 rounded-xl space-y-1 text-[10px]">
+            <div className="text-gray-400 font-bold text-[9px] uppercase tracking-wider mb-1">
+              Zone 1–4 Safety Bands
+            </div>
+            <div className="flex justify-between text-red-400"><span>Zone 1 Lethal:</span><strong>&gt; 37.5 kW/m²</strong></div>
+            <div className="flex justify-between text-amber-400"><span>Zone 2 Serious:</span><strong>12.5 kW/m²</strong></div>
+            <div className="flex justify-between text-yellow-400"><span>Zone 3 Injury:</span><strong>4.7 kW/m²</strong></div>
+            <div className="flex justify-between text-emerald-400"><span>Zone 4 Awareness:</span><strong>1.6 kW/m²</strong></div>
+          </div>
+        </div>
+      )}
+
+      {/* ── TAB 2: GEOMETRY & FUEL LOAD ─────────────────────────────────── */}
+      {activeTab === 'GEOMETRY' && (
+        <div className="space-y-2.5 pt-1 max-h-[340px] overflow-y-auto pr-1">
+          {isFacilityA ? (
+            <>
+              <NumericStepperSlider
+                label="Tank Diameter"
+                value={params.tank_diameter_m}
+                min={2}
+                max={30}
+                step={0.5}
+                unit="m"
+                color="red"
+                onChange={(v) => set({ tank_diameter_m: v })}
+              />
+              <NumericStepperSlider
+                label="Tank Volume"
+                value={params.tank_volume_m3}
+                min={10}
+                max={500}
+                step={10}
+                unit="m³"
+                color="red"
+                onChange={(v) => {
+                  const rho = 500;
+                  const mass = rho * v * (params.fill_fraction ?? 0.85);
+                  set({ tank_volume_m3: v, mass_kg: Math.round(mass) });
+                }}
+              />
+              <NumericStepperSlider
+                label="Fill Fraction"
+                value={params.fill_fraction ?? 0.85}
+                min={0.1}
+                max={0.95}
+                step={0.05}
+                unit=""
+                color="red"
+                onChange={(v) => {
+                  const mass = 500 * params.tank_volume_m3 * v;
+                  set({ fill_fraction: v, mass_kg: Math.round(mass) });
+                }}
+              />
+              <div className="bg-slate-900/90 border border-slate-800 p-2.5 rounded-xl flex justify-between items-center text-xs">
+                <span className="text-gray-400 text-[10px]">Calculated Mass:</span>
+                <span className="text-red-400 font-bold font-mono">{params.mass_kg.toLocaleString()} kg</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <NumericStepperSlider
+                label="Pool Diameter D"
+                value={params.pool_diameter_m}
+                min={5}
+                max={80}
+                step={1}
+                unit="m"
+                color="amber"
+                onChange={(v) => set({ pool_diameter_m: v })}
+              />
+              <NumericStepperSlider
+                label="Tank Volume"
+                value={params.tank_volume_m3}
+                min={10}
+                max={500}
+                step={10}
+                unit="m³"
+                color="amber"
+                onChange={(v) => set({ tank_volume_m3: v })}
+              />
+              <NumericStepperSlider
+                label="Fill Fraction"
+                value={params.fill_fraction ?? 0.70}
+                min={0.1}
+                max={0.95}
+                step={0.05}
+                unit=""
+                color="amber"
+                onChange={(v) => set({ fill_fraction: v })}
+              />
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── TAB 3: WIND & METEOROLOGY ──────────────────────────────────── */}
+      {activeTab === 'WIND' && (
+        <div className="space-y-2.5 pt-1">
+          <div className="flex justify-center py-1">
+            <WindRose
+              bearing={params.wind_direction_deg}
+              onChange={(deg) => set({ wind_direction_deg: deg })}
+            />
+          </div>
+
+          <NumericStepperSlider
+            label="Wind Speed"
+            value={params.wind_speed_ms}
+            min={0}
+            max={30}
+            step={0.5}
+            unit="m/s"
+            color="cyan"
+            onChange={(v) => set({ wind_speed_ms: v })}
+          />
+
+          <NumericStepperSlider
+            label="Wind Bearing (Precise)"
+            value={params.wind_direction_deg}
+            min={0}
+            max={360}
+            step={1}
+            unit="°"
+            color="cyan"
+            onChange={(v) => set({ wind_direction_deg: v })}
+          />
+        </div>
+      )}
     </div>
   );
 };
