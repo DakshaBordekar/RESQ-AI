@@ -1,7 +1,8 @@
 // ────────────────────────────────────────────────────────────────────────────
 // RESQ-AI DER-02 3D Tactical Command HUD Overlay
 // Upper Event Timeline Controller, Play/Pause/Replay/Reset Controls,
-// 7 Camera Presets, Lighting Switcher, and Unobstructed 3D Viewport
+// 8 Camera Presets, What-If Wind Drawer, AI Explainability Card,
+// Asset Health Heatmap Overlay Selector, and Mission Scorecard Modal
 // ────────────────────────────────────────────────────────────────────────────
 
 import React, { useState } from 'react';
@@ -13,8 +14,16 @@ import {
   BlevePhase,
   SpatialProbePoint,
   ThreatCalculateParams,
+  TacticalOverlayMode,
+  AssetRiskProfile,
+  TacticalExplainabilityReport,
+  MissionScorecard,
 } from '../../simulation/types';
 import { PhysicsModelModal } from './PhysicsModelModal';
+import { WindWhatIfDrawer } from './WindWhatIfDrawer';
+import { ExplainabilityCard } from './ExplainabilityCard';
+import { AssetInspectionModal } from './AssetInspectionModal';
+import { MissionScorecardModal } from './MissionScorecardModal';
 import {
   Eye,
   Camera,
@@ -38,6 +47,10 @@ import {
   ChevronUp,
   ChevronDown,
   RefreshCw,
+  Wind,
+  FileText,
+  Award,
+  Box,
 } from 'lucide-react';
 
 interface DigitalTwinHUDProps {
@@ -65,6 +78,24 @@ interface DigitalTwinHUDProps {
   onResetScene: () => void;
   probePoint: SpatialProbePoint | null;
   onExit3D: () => void;
+  // F01: Wind What-If
+  windDirectionDeg: number;
+  windSpeedMs: number;
+  onChangeWindDirection: (deg: number) => void;
+  onChangeWindSpeed: (ms: number) => void;
+  // F02: AI Explainability
+  explainabilityReport: TacticalExplainabilityReport;
+  // F03 / F04: Asset Health & Heatmap
+  tacticalOverlayMode: TacticalOverlayMode;
+  onSelectTacticalOverlayMode: (mode: TacticalOverlayMode) => void;
+  monitoredAssets: AssetRiskProfile[];
+  inspectedAsset: AssetRiskProfile | null;
+  onCloseInspectedAsset: () => void;
+  // F05: Mission Scorecard
+  scorecard: MissionScorecard | null;
+  isScorecardOpen: boolean;
+  onOpenScorecard: () => void;
+  onCloseScorecard: () => void;
 }
 
 export const DigitalTwinHUD: React.FC<DigitalTwinHUDProps> = ({
@@ -92,14 +123,29 @@ export const DigitalTwinHUD: React.FC<DigitalTwinHUDProps> = ({
   onResetScene,
   probePoint,
   onExit3D,
+  windDirectionDeg,
+  windSpeedMs,
+  onChangeWindDirection,
+  onChangeWindSpeed,
+  explainabilityReport,
+  tacticalOverlayMode,
+  onSelectTacticalOverlayMode,
+  monitoredAssets,
+  inspectedAsset,
+  onCloseInspectedAsset,
+  scorecard,
+  isScorecardOpen,
+  onOpenScorecard,
+  onCloseScorecard,
 }) => {
   const [physicsModalOpen, setPhysicsModalOpen] = useState(false);
+  const [explainabilityOpen, setExplainabilityOpen] = useState(false);
+  const [windDrawerOpen, setWindDrawerOpen] = useState(false);
   const [bottomTelemetryOpen, setBottomTelemetryOpen] = useState(true);
 
   const isFacilityA = (threatData?.facility_type || params?.facility_type) !== 'FACILITY_B_POOL_FIRE';
   const metrics = threatData?.physics_metrics;
   const safeVec = threatData?.safe_approach_vector;
-  const windDir = params?.wind_direction_deg ?? 135;
 
   const isRunning = blevePhase !== 'IDLE' && blevePhase !== 'AFTERMATH';
 
@@ -153,7 +199,7 @@ export const DigitalTwinHUD: React.FC<DigitalTwinHUDProps> = ({
             </div>
           </div>
 
-          {/* Center: Threat Modes & Lighting */}
+          {/* Center: Threat Modes, Overlays & Lighting */}
           <div className="flex items-center gap-1.5 flex-wrap">
             {/* Threat Mode Toggles */}
             <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5 gap-0.5 text-xs">
@@ -189,6 +235,22 @@ export const DigitalTwinHUD: React.FC<DigitalTwinHUDProps> = ({
               >
                 <Zap className="w-3 h-3" />
                 <span>BLAST</span>
+              </button>
+            </div>
+
+            {/* F04: Asset Heatmap Overlay Selector */}
+            <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5 gap-0.5 text-xs">
+              <button
+                onClick={() => onSelectTacticalOverlayMode(tacticalOverlayMode === 'ASSET_RISK' ? 'OFF' : 'ASSET_RISK')}
+                title="Toggle Asset Health & Risk Overlay (F04)"
+                className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold transition-all ${
+                  tacticalOverlayMode === 'ASSET_RISK'
+                    ? 'bg-orange-500 text-slate-950 shadow'
+                    : 'text-slate-400 hover:text-gray-200'
+                }`}
+              >
+                <Box className="w-3 h-3" />
+                <span>ASSETS</span>
               </button>
             </div>
 
@@ -279,6 +341,30 @@ export const DigitalTwinHUD: React.FC<DigitalTwinHUDProps> = ({
                 </>
               )}
             </div>
+
+            {/* F02: AI RATIONALE Button */}
+            <button
+              onClick={() => setExplainabilityOpen(!explainabilityOpen)}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all ${
+                explainabilityOpen
+                  ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-lg'
+                  : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-cyan-300'
+              }`}
+            >
+              <FileText className="w-3 h-3" />
+              <span>AI RATIONALE</span>
+            </button>
+
+            {/* F05: SCORECARD Button */}
+            {scorecard && (
+              <button
+                onClick={onOpenScorecard}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-emerald-950 hover:bg-emerald-900 border border-emerald-500/60 text-emerald-300 shadow animate-pulse"
+              >
+                <Award className="w-3 h-3" />
+                <span>SCORECARD ({scorecard.grade})</span>
+              </button>
+            )}
 
             {/* Physics Transparency Button */}
             <button
@@ -378,7 +464,7 @@ export const DigitalTwinHUD: React.FC<DigitalTwinHUDProps> = ({
         </div>
       </div>
 
-      {/* ── 2. COMPACT UPPER-THIRD TERRAIN PROBE BADGE (Zero Center Obscurity) ── */}
+      {/* ── 2. COMPACT UPPER-THIRD TERRAIN PROBE BADGE ─────────────────────── */}
       {probePoint && probePoint.severityTier !== 'SAFE' && (
         <div
           className="absolute top-[96px] left-1/2 -translate-x-1/2 bg-slate-950/95 backdrop-blur-md border border-cyan-500/60 px-3 py-1 rounded-full shadow-2xl pointer-events-none flex items-center gap-3 text-[10px] animate-in fade-in zoom-in-95 duration-100 z-[1050]"
@@ -423,7 +509,26 @@ export const DigitalTwinHUD: React.FC<DigitalTwinHUDProps> = ({
         </div>
       )}
 
-      {/* ── 3. BOTTOM TELEMETRY DOCKS (Collapsible) ─────────────────────────── */}
+      {/* ── 3. F04: CLICKED ASSET INSPECTION CARD ──────────────────────────── */}
+      <AssetInspectionModal asset={inspectedAsset} onClose={onCloseInspectedAsset} />
+
+      {/* ── 4. F02: AI EXPLAINABILITY CARD ─────────────────────────────────── */}
+      <ExplainabilityCard
+        report={explainabilityReport}
+        isOpen={explainabilityOpen}
+        onClose={() => setExplainabilityOpen(false)}
+      />
+
+      {/* ── 5. F05: MISSION SCORECARD MODAL ────────────────────────────────── */}
+      <MissionScorecardModal
+        scorecard={scorecard}
+        isOpen={isScorecardOpen}
+        onClose={onCloseScorecard}
+        onReplay={handleReplay}
+        onReset={onResetScene}
+      />
+
+      {/* ── 6. BOTTOM TELEMETRY DOCKS & WHAT-IF WIND CONTROLS ───────────────── */}
       <div className="flex items-end justify-between gap-3 pointer-events-auto">
         {/* Bottom-Left: Live Physical Telemetry Card */}
         {bottomTelemetryOpen && (
@@ -499,8 +604,21 @@ export const DigitalTwinHUD: React.FC<DigitalTwinHUDProps> = ({
           </button>
         )}
 
-        {/* Bottom-Right: Safe Ingress Route & Emergency Response Telemetry */}
+        {/* Bottom-Right: F01 Interactive What-If Wind Drawer */}
         <div className="flex flex-col gap-2 max-w-xs">
+          <WindWhatIfDrawer
+            windDirectionDeg={windDirectionDeg}
+            windSpeedMs={windSpeedMs}
+            onChangeWindDirection={onChangeWindDirection}
+            onChangeWindSpeed={onChangeWindSpeed}
+            onResetDefaults={() => {
+              onChangeWindDirection(135);
+              onChangeWindSpeed(8.5);
+            }}
+            isOpen={windDrawerOpen}
+            onToggleOpen={() => setWindDrawerOpen(!windDrawerOpen)}
+          />
+
           {/* Emergency Response Live Status */}
           {blevePhase !== 'IDLE' && (
             <div className="bg-slate-950/95 backdrop-blur-xl border border-red-500/50 p-2.5 rounded-xl shadow-2xl text-xs space-y-1.5 animate-in fade-in zoom-in-95">
@@ -544,39 +662,6 @@ export const DigitalTwinHUD: React.FC<DigitalTwinHUDProps> = ({
                       ? 'SUPPRESSING (75%)'
                       : '0% PENDING'}
                   </strong>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Safe Ingress Route & Hazard Vector Badge */}
-          {safeVec && (
-            <div className="bg-slate-950/90 backdrop-blur-xl border border-slate-800 p-2.5 rounded-xl shadow-2xl text-xs space-y-2">
-              {/* Downwind Hazard Axis */}
-              <div className="flex items-center justify-between border-b border-slate-800/80 pb-1 text-[9px]">
-                <span className="flex items-center gap-1 text-red-400 font-bold">
-                  <Flame className="w-3 h-3 text-red-500" />
-                  HAZARD AXIS (DOWNWIND)
-                </span>
-                <span className="text-red-300 font-bold">
-                  {Math.round(windDir)}°
-                </span>
-              </div>
-
-              {/* Safe Approach Corridor */}
-              <div className="bg-emerald-950/80 border border-emerald-500/50 p-2 rounded-lg space-y-1">
-                <div className="flex items-center justify-between text-emerald-400 font-bold text-[9px]">
-                  <span>SAFE APPROACH CORRIDOR</span>
-                  <span className="text-[8px] bg-emerald-900 text-emerald-200 px-1 py-0.2 rounded font-bold">
-                    UPWIND
-                  </span>
-                </div>
-
-                <div className="text-xs font-bold text-white">
-                  HEADING {safeVec.cardinal_direction} ({safeVec.safe_angle_deg}°)
-                </div>
-                <div className="text-[8px] text-emerald-200/80 leading-tight">
-                  180° opposite to downwind plume. Staging & ingress: <strong>0% lethal hazard crossing</strong>.
                 </div>
               </div>
             </div>

@@ -157,3 +157,85 @@ export interface DecisionSupportResponse {
     scenario_comparison_rationale?: string;
   };
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// F03 / F04: CASCADING DOMINO EFFECT & FACILITY ASSET HEALTH TYPES
+// ────────────────────────────────────────────────────────────────────────────
+export type AssetRiskState = 'SAFE' | 'LOW' | 'ELEVATED' | 'HIGH' | 'CRITICAL';
+export type TacticalOverlayMode = 'OFF' | 'ASSET_RISK' | 'THERMAL_FLUX';
+
+export interface MonitoredIndustrialAsset {
+  id: string;
+  name: string;
+  type: 'LPG_BULLET_TANK' | 'STORAGE_TANK' | 'DISTILLATION_COLUMN' | 'PIPE_RACK' | 'PUMP_STATION' | 'CONTROL_ROOM' | 'SUBSTATION' | 'WAREHOUSE';
+  worldPosition: [number, number, number]; // [x, y, z] in Three.js coordinates
+  dimensionsM: [number, number, number]; // [width, height, depth]
+  criticalThresholdKwM2: number; // e.g. 12.5 or 25 kW/m²
+  thermalInertiaSec: number; // base time to critical failure under max radiant flux
+}
+
+export interface AssetRiskProfile {
+  id: string;
+  name: string;
+  type: string;
+  worldPosition: [number, number, number];
+  distanceM: number;
+  bearingDeg: number;
+  thermalFluxKwM2: number;
+  riskState: AssetRiskState;
+  timeToCriticalSec: number | null; // null if safe
+  initialTimeToCriticalSec: number | null;
+  coolingStatus: 'INACTIVE' | 'COOLING_ENGAGED' | 'QUENCHED';
+  structuralIntegrityPct: number; // 100% down to 0%
+  riskTrend: 'STABLE' | 'HEATING' | 'COOLING_DOWN';
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// F02: AI TACTICAL EXPLAINABILITY DATA STRUCTURE
+// ────────────────────────────────────────────────────────────────────────────
+export interface TacticalExplainabilityReport {
+  primaryHazard: string;
+  dominantMechanism: string;
+  peakMetricValue: string;
+  peakMetricLabel: string;
+  downwindHeadingDeg: number;
+  downwindCardinal: string;
+  safeHeadingDeg: number;
+  safeCardinal: string;
+  stagingDistanceM: number;
+  waterFlowRequirementLpm: number;
+  ingressRationale: string;
+  standoffRationale: string;
+  coolingRationale: string;
+  regulatoryStandard: string;
+  confidenceScorePct: number;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// F05: AUTOMATED EMERGENCY RESPONSE & LIFE-SAFETY SCORECARD
+// ────────────────────────────────────────────────────────────────────────────
+export type MissionGrade = 'A+' | 'A' | 'B+' | 'B' | 'C' | 'D' | 'F';
+export type MissionOutcome = 'MISSION_SUCCESS' | 'PARTIAL_SUCCESS' | 'MISSION_FAILURE';
+
+export interface MissionScorecard {
+  executionTimestamp: string;
+  responseDurationSec: number;
+  responseScore: number; // 0-100 (weight 20%)
+  corridorAdherencePct: number;
+  corridorScore: number; // 0-100 (weight 25%)
+  stagingCompliancePct: number;
+  stagingScore: number; // 0-100 (weight 15%)
+  suppressionEffectivenessPct: number;
+  suppressionScore: number; // 0-100 (weight 20%)
+  secondaryFailuresPreventedCount: number;
+  secondaryProtectionScore: number; // 0-100 (weight 15%)
+  criticalAssetsProtectedCount: number;
+  totalMonitoredAssetsCount: number;
+  assetProtectionScore: number; // 0-100 (weight 5%)
+  overallScore: number; // 0-100
+  grade: MissionGrade;
+  outcome: MissionOutcome;
+  summaryFeedback: string;
+  keyActionItems: string[];
+}
+

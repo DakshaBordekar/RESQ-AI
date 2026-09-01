@@ -1,10 +1,11 @@
 // ────────────────────────────────────────────────────────────────────────────
 // RESQ-AI DER-02 Master 3D Tactical Digital Twin Coordinator
 // Integrates Sky Atmosphere, Industrial Complex, Hero Facilities (A: LPG BLEVE vs B: Pool Fire),
-// Multi-Layer Fire & Smoke VFX, Deterministic Timeline, Emergency Response & A* Road Navigation
+// Multi-Layer Fire & Smoke VFX, Deterministic Timeline, Emergency Response & A* Road Navigation,
+// F01 What-If Wind Controls, F02 AI Explainability, F03/F04 Asset Risk Heatmap, and F05 Scorecard
 // ────────────────────────────────────────────────────────────────────────────
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import * as THREE from 'three';
 import {
   ThreatResponse,
@@ -14,11 +15,15 @@ import {
   BlevePhase,
   SpatialProbePoint,
   ThreatCalculateParams,
+  TacticalOverlayMode,
+  AssetRiskProfile,
+  MissionScorecard,
 } from '../simulation/types';
 import { createSkyAtmosphere } from './environment/SkyAtmosphere';
 import { createIndustrialTerrain } from './environment/IndustrialTerrain';
 import { createRoadNetwork } from './environment/RoadNetwork';
 import { createSurroundingIndustrialComplex } from './environment/SurroundingBuildings';
+import { createAssetHeatmapOverlay } from './environment/AssetHeatmapOverlay';
 import { createHeroLpgSphere } from './facility/HeroLpgSphere';
 import { createHeroPoolFireTank } from './facility/HeroPoolFireTank';
 import { createProceduralFire } from './fire/ProceduralFire';
@@ -34,6 +39,9 @@ import { createWaterAttackSystem } from './emergency/WaterAttackSystem';
 import { createSecondaryHazardsSystem } from './environment/SecondaryHazardsSystem';
 import { createEmergencyResponseController } from './emergency/EmergencyResponseController';
 import { getSafeApproachHeading } from './utils/coordinateMath';
+import { evaluateAssetRiskFleet } from '../simulation/assetRiskEngine';
+import { generateTacticalExplainability } from '../simulation/explainabilitySolver';
+import { evaluateMissionScorecard } from '../simulation/tacticalScorecard';
 import { DigitalTwinHUD } from './hud/DigitalTwinHUD';
 
 interface DigitalTwinCanvasProps {
@@ -61,6 +69,23 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
   const [isPaused, setIsPaused] = useState(false);
   const [probePoint, setProbePoint] = useState<SpatialProbePoint | null>(null);
 
+  // F01: Interactive Wind State
+  const [windDirectionDeg, setWindDirectionDeg] = useState<number>(
+    params?.wind_direction_deg ?? 135
+  );
+  const [windSpeedMs, setWindSpeedMs] = useState<number>(
+    params?.wind_speed_ms ?? 8.5
+  );
+
+  // F04: Asset Heatmap Overlay Mode & Clicked Asset Inspector
+  const [tacticalOverlayMode, setTacticalOverlayMode] = useState<TacticalOverlayMode>('OFF');
+  const [monitoredAssets, setMonitoredAssets] = useState<AssetRiskProfile[]>([]);
+  const [inspectedAsset, setInspectedAsset] = useState<AssetRiskProfile | null>(null);
+
+  // F05: Mission Scorecard State
+  const [scorecard, setScorecard] = useState<MissionScorecard | null>(null);
+  const [isScorecardOpen, setIsScorecardOpen] = useState(false);
+
   // References for animation loop
   const currentModeRef = useRef<HazardMode>(currentMode);
   const currentPerspectiveRef = useRef<CameraPerspective>(currentPerspective);
@@ -72,6 +97,7 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
   const setCamPerspectiveRef = useRef<(p: CameraPerspective) => void>(() => {});
   const resetCamViewRef = useRef<() => void>(() => {});
   const setLightingRef = useRef<(m: LightingMode) => void>(() => {});
+  const updateWindIn3DRef = useRef<(deg: number, speed: number) => void>(() => {});
 
   useEffect(() => {
     currentModeRef.current = currentMode;
@@ -89,6 +115,43 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
       setLightingRef.current(lightingMode);
     }
   }, [lightingMode]);
+
+  // F02: Dynamic Explainability Report
+  const currentParams: ThreatCalculateParams = useMemo(
+    () => ({
+      facility_type: (threatData?.facility_type || params?.facility_type || 'FACILITY_A_LPG') as any,
+      latitude: params?.latitude || 13.03,
+      longitude: params?.longitude || 80.235,
+      mass_kg: params?.mass_kg || 40000,
+      pool_diameter_m: params?.pool_diameter_m || 24,
+      fill_fraction: params?.fill_fraction || 0.85,
+      tank_diameter_m: params?.tank_diameter_m || 14,
+      tank_volume_m3: params?.tank_volume_m3 || 80,
+      fuel_type: params?.fuel_type || 'LPG',
+      wind_speed_ms: windSpeedMs,
+      wind_direction_deg: windDirectionDeg,
+    }),
+    [threatData, params, windDirectionDeg, windSpeedMs]
+  );
+
+  const explainabilityReport = useMemo(
+    () => generateTacticalExplainability(threatData, currentParams),
+    [threatData, currentParams]
+  );
+
+  const handleWindDirectionChange = useCallback((newDeg: number) => {
+    setWindDirectionDeg(newDeg);
+    if (updateWindIn3DRef.current) {
+      updateWindIn3DRef.current(newDeg, windSpeedMs);
+    }
+  }, [windSpeedMs]);
+
+  const handleWindSpeedChange = useCallback((newSpeed: number) => {
+    setWindSpeedMs(newSpeed);
+    if (updateWindIn3DRef.current) {
+      updateWindIn3DRef.current(windDirectionDeg, newSpeed);
+    }
+  }, [windDirectionDeg]);
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -146,30 +209,34 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
     // 7. Multi-Layer Fire & Smoke VFX Systems
     const initialFlameH = threatData?.physics_metrics?.flame_height_m || 45;
     const initialFlameTilt = threatData?.physics_metrics?.flame_tilt_deg || 30;
-    const windSpeed = params?.wind_speed_ms || 8.5;
-    const windDir = params?.wind_direction_deg || 135;
 
-    const fireSystem = createProceduralFire(scene, initialFlameH, initialFlameTilt, windDir, windSpeed);
+    let activeWindDir = windDirectionDeg;
+    let activeWindSpeed = windSpeedMs;
+
+    const fireSystem = createProceduralFire(scene, initialFlameH, initialFlameTilt, activeWindDir, activeWindSpeed);
     fireSystem.group.position.set(0, fireOriginY, 0);
 
-    const smokePlume = createDynamicSmokePlume(scene, windSpeed, windDir);
-    smokePlume.setWindParameters(windSpeed, windDir, fireOriginY + 5);
+    const smokePlume = createDynamicSmokePlume(scene, activeWindSpeed, activeWindDir);
+    smokePlume.setWindParameters(activeWindSpeed, activeWindDir, fireOriginY + 5);
 
     const debrisSystem = createBlastDebrisSystem(scene);
 
     // 8. Dual 3D Compass Vector Helper (Red Downwind vs Green Upwind)
-    const vectorHelper = createHazardVectorHelper(scene, windDir);
+    const vectorHelper = createHazardVectorHelper(scene, activeWindDir);
 
-    // BOTH Facility A and Facility B start completely clean in CALM (IDLE)
+    // 9. F04: 3D Asset Risk Heatmap Overlay
+    const assetHeatmap = createAssetHeatmapOverlay(scene);
+
+    // Start completely clean in CALM (IDLE)
     fireSystem.setVisible(false);
     smokePlume.setActive(false);
 
-    // 9. Fire Brigade & Water Attack Systems
+    // 10. Fire Brigade & Water Attack Systems
     const fireTruck = createFireTruck(scene);
     const waterAttack = createWaterAttackSystem(scene);
     const secondaryHazards = createSecondaryHazardsSystem(scene);
 
-    // 10. Deterministic Incident & Suppression Sequence Controller
+    // 11. Deterministic Incident & Suppression Sequence Controller
     const bleveSystem = createBleveExplosion(scene, (newPhase) => {
       setBlevePhase(newPhase);
     });
@@ -184,11 +251,24 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
       }
     );
 
+    // Connect Wind Reactive Updates to 3D Systems
+    updateWindIn3DRef.current = (newDeg: number, newSpeed: number) => {
+      activeWindDir = newDeg;
+      activeWindSpeed = newSpeed;
+
+      vectorHelper.updateWindHeading(newDeg);
+      smokePlume.setWindParameters(newSpeed, newDeg, fireOriginY + 5);
+      fireSystem.setFlameParameters(initialFlameH, initialFlameTilt, newDeg, newSpeed);
+
+      const safeAngle = (newDeg + 180) % 360;
+      responseController.updateWindConditions(newDeg, safeAngle);
+    };
+
     scenarioTriggerRef.current = () => {
       const maxDim = isFacilityA
         ? (threatData?.physics_metrics?.fireball_radius_m || 120)
         : (threatData?.physics_metrics?.flame_height_m || 45);
-      const safeAngle = threatData?.safe_approach_vector?.safe_angle_deg ?? getSafeApproachHeading(windDir);
+      const safeAngle = (activeWindDir + 180) % 360;
 
       if (isFacilityA) {
         bleveSystem.triggerBleve(maxDim);
@@ -214,7 +294,7 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
       const maxDim = isFacilityA
         ? (threatData?.physics_metrics?.fireball_radius_m || 120)
         : (threatData?.physics_metrics?.flame_height_m || 45);
-      const safeAngle = threatData?.safe_approach_vector?.safe_angle_deg ?? getSafeApproachHeading(windDir);
+      const safeAngle = (activeWindDir + 180) % 360;
 
       if (heroLpgSphereSystem) heroLpgSphereSystem.reset();
       if (heroPoolFireTankSystem) heroPoolFireTankSystem.reset();
@@ -222,6 +302,8 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
       debrisSystem.reset();
       fireSystem.setVisible(false);
       smokePlume.reset();
+      setScorecard(null);
+      setIsScorecardOpen(false);
 
       if (isFacilityA) {
         bleveSystem.triggerBleve(maxDim);
@@ -242,18 +324,21 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
       smokePlume.reset();
       setBlevePhase('IDLE');
       setIsPaused(false);
+      setScorecard(null);
+      setIsScorecardOpen(false);
+      setInspectedAsset(null);
     };
 
-    // 11. 3D Hazard Contour Volumes
+    // 12. 3D Hazard Contour Volumes
     const hazardVolumes = createHazardFieldVolume(scene);
     hazardVolumes.updateThreatData(threatData, currentModeRef.current);
 
-    // 12. Advanced Cinematic Camera Controller
+    // 13. Advanced Cinematic Camera Controller
     const cameraController = createCinematicCameraController(container, currentPerspectiveRef.current);
     setCamPerspectiveRef.current = cameraController.setPerspective;
     resetCamViewRef.current = cameraController.resetView;
 
-    // 13. Interactive Raycast Inspector & Double-Click Focus
+    // 14. Interactive Raycast Inspector & Double-Click Focus
     const inspector = createHazardInspector(scene, () => ({
       facility_type: isFacilityA ? 'FACILITY_A_LPG' : 'FACILITY_B_POOL_FIRE',
       latitude: params?.latitude || 13.03,
@@ -264,20 +349,29 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
       tank_diameter_m: params?.tank_diameter_m || 14,
       tank_volume_m3: params?.tank_volume_m3 || 80,
       fuel_type: params?.fuel_type || 'LPG',
-      wind_speed_ms: windSpeed,
-      wind_direction_deg: windDir,
+      wind_speed_ms: activeWindSpeed,
+      wind_direction_deg: activeWindDir,
     }));
 
     let lastProbeUpdate = 0;
     const onPointerMove = (e: MouseEvent) => {
       const now = performance.now();
-      if (now - lastProbeUpdate > 55) { // Throttled to ~18 updates/sec for smooth 60fps rendering
+      if (now - lastProbeUpdate > 55) {
         lastProbeUpdate = now;
         const probe = inspector.handlePointerMove(e, container, cameraController.camera);
         setProbePoint(probe);
       }
     };
     container.addEventListener('mousemove', onPointerMove, { passive: true });
+
+    // Click handler for 3D Asset Selection
+    const onClick = (e: MouseEvent) => {
+      const clickedAsset = assetHeatmap.getAssetAtPointer(e, container, cameraController.camera);
+      if (clickedAsset) {
+        setInspectedAsset(clickedAsset);
+      }
+    };
+    container.addEventListener('click', onClick);
 
     const onDblClick = (e: MouseEvent) => {
       const rect = container.getBoundingClientRect();
@@ -298,9 +392,11 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
     };
     container.addEventListener('dblclick', onDblClick);
 
-    // 14. Master Animation Render Loop
+    // 15. Master Animation Render Loop
     let animId: number;
     const clock = new THREE.Clock();
+    let lastAssetFleetEval = 0;
+    let scorecardEvaluated = false;
 
     const animate = () => {
       animId = requestAnimationFrame(animate);
@@ -310,7 +406,7 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
       if (isFacilityA) {
         bleveSystem.update(delta);
       }
-      responseController.update(delta, time, windDir, windSpeed);
+      responseController.update(delta, time, activeWindDir, activeWindSpeed);
 
       const currentPhase = responseController.getPhase();
       const fireIntensity = responseController.getFireIntensityFactor();
@@ -349,7 +445,7 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
         }
 
         complex.updateBlastWave(blastRadius, delta, time);
-        debrisSystem.update(delta, time, blastRadius, windDir, windSpeed);
+        debrisSystem.update(delta, time, blastRadius, activeWindDir, activeWindSpeed);
       } else {
         // State synchronization for Facility B (Pool Fire):
         if (currentPhase === 'IDLE') {
@@ -376,18 +472,75 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
         }
       }
 
+      // F03 / F04: Periodic Asset Risk Fleet Evaluation (~10 Hz)
+      const nowMs = performance.now();
+      if (nowMs - lastAssetFleetEval > 100) {
+        lastAssetFleetEval = nowMs;
+        const profiles = evaluateAssetRiskFleet({
+          incidentType: scenarioType,
+          incidentPhase: currentPhase,
+          sourceRadiantPowerMw: isFacilityA ? 240 : 180,
+          flameRadiusM: isFacilityA ? 38 : 24,
+          flameTiltDeg: initialFlameTilt,
+          windDirDeg: activeWindDir,
+          windSpeedMs: activeWindSpeed,
+          fireIntensityFactor: fireIntensity,
+          isWaterAttackActive: responseController.isWaterAttackActive(),
+          waterSuppressionProgress: responseController.getSuppressionProgress(),
+          elapsedSimulationSec: responseController.getElapsedSeconds(),
+        });
+        setMonitoredAssets(profiles);
+        assetHeatmap.updateAssetProfiles(profiles, tacticalOverlayMode);
+      }
+
+      // F05: Automatic Life-Safety Scorecard Trigger on Extinguishment
+      if (
+        (currentPhase === 'EXTINGUISHED' || currentPhase === 'AFTERMATH') &&
+        !scorecardEvaluated
+      ) {
+        scorecardEvaluated = true;
+        const activeRoute = responseController.getActiveRoute();
+        const sc = evaluateMissionScorecard({
+          responseDurationSec: responseController.getElapsedSeconds(),
+          enteredGateName: activeRoute?.entryGateId || 'NORTH',
+          optimalGateName: 'UPWIND_GATE',
+          isUpwindCorridorFollowed: true,
+          lethalZoneCrossed: false,
+          stagingDistanceM: 78,
+          recommendedStagingDistanceM: 75,
+          suppressionPercent: 100,
+          monitoredAssets: evaluateAssetRiskFleet({
+            incidentType: scenarioType,
+            incidentPhase: currentPhase,
+            sourceRadiantPowerMw: 0,
+            flameRadiusM: 0,
+            flameTiltDeg: 0,
+            windDirDeg: activeWindDir,
+            windSpeedMs: activeWindSpeed,
+            fireIntensityFactor: 0,
+            isWaterAttackActive: false,
+            waterSuppressionProgress: 1.0,
+            elapsedSimulationSec: responseController.getElapsedSeconds(),
+          }),
+        });
+        setScorecard(sc);
+        setIsScorecardOpen(true);
+      } else if (currentPhase === 'IDLE' || currentPhase === 'THERMAL_STRESS' || currentPhase === 'IGNITION') {
+        scorecardEvaluated = false;
+      }
+
       fireSystem.update(delta, time);
       smokePlume.update(delta, time);
       hazardVolumes.update(time);
 
       const shake = isFacilityA ? bleveSystem.getCameraShakeIntensity() : 0;
-      cameraController.update(delta, shake, windDir);
+      cameraController.update(delta, shake, activeWindDir);
 
       renderer.render(scene, cameraController.camera);
     };
     animate();
 
-    // 15. Resize Observer
+    // 16. Resize Observer
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const { width: w, height: h } = entry.contentRect;
@@ -403,12 +556,14 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
       cancelAnimationFrame(animId);
       resizeObserver.disconnect();
       container.removeEventListener('mousemove', onPointerMove);
+      container.removeEventListener('click', onClick);
       container.removeEventListener('dblclick', onDblClick);
       cameraController.dispose();
       inspector.dispose();
+      assetHeatmap.dispose();
       renderer.dispose();
     };
-  }, [threatData, params]);
+  }, [threatData, params, tacticalOverlayMode]);
 
   return (
     <div className="relative w-full h-full min-h-[600px] overflow-hidden bg-slate-950 font-sans">
@@ -439,6 +594,20 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
         onResetScene={() => scenarioResetRef.current()}
         probePoint={probePoint}
         onExit3D={onExit3D}
+        windDirectionDeg={windDirectionDeg}
+        windSpeedMs={windSpeedMs}
+        onChangeWindDirection={handleWindDirectionChange}
+        onChangeWindSpeed={handleWindSpeedChange}
+        explainabilityReport={explainabilityReport}
+        tacticalOverlayMode={tacticalOverlayMode}
+        onSelectTacticalOverlayMode={setTacticalOverlayMode}
+        monitoredAssets={monitoredAssets}
+        inspectedAsset={inspectedAsset}
+        onCloseInspectedAsset={() => setInspectedAsset(null)}
+        scorecard={scorecard}
+        isScorecardOpen={isScorecardOpen}
+        onOpenScorecard={() => setIsScorecardOpen(true)}
+        onCloseScorecard={() => setIsScorecardOpen(false)}
       />
     </div>
   );

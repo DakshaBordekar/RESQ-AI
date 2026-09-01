@@ -15,6 +15,7 @@ import { SecondaryHazardsComponents } from '../environment/SecondaryHazardsSyste
 export interface EmergencyResponseComponents {
   update: (delta: number, time: number, windDirDeg: number, windSpeedMs: number) => void;
   triggerScenario: (scenarioType: 'FACILITY_A_LPG' | 'FACILITY_B_POOL_FIRE', maxDimensionM: number, safeHeadingDeg: number) => void;
+  updateWindConditions: (windDirDeg: number, safeHeadingDeg: number) => void;
   pause: () => void;
   resume: () => void;
   replay: () => void;
@@ -22,6 +23,10 @@ export interface EmergencyResponseComponents {
   getPhase: () => BlevePhase;
   isPaused: () => boolean;
   getFireIntensityFactor: () => number;
+  getElapsedSeconds: () => number;
+  isWaterAttackActive: () => boolean;
+  getSuppressionProgress: () => number;
+  getActiveRoute: () => EmergencyRouteResult | null;
   getTelemetryStatus: () => {
     phase: BlevePhase;
     safeHeadingDeg: number;
@@ -94,6 +99,17 @@ export const createEmergencyResponseController = (
     } else {
       setPhaseInternal('IGNITION');
       if (onEvent) onEvent('POOL_FIRE_TRIGGERED');
+    }
+  };
+
+  const updateWindConditions = (windDirDeg: number, safeHeadingDeg: number) => {
+    const headingDiff = Math.abs(safeHeading - safeHeadingDeg);
+    safeHeading = safeHeadingDeg;
+
+    // If wind shifts significantly while truck is en-route, replan path to new safe gate
+    if (headingDiff > 25 && phase === 'EMERGENCY_RESPONSE') {
+      activeRoute = roadNetwork.findEmergencyRoute(safeHeading);
+      fireTruck.dispatchOnRoute(activeRoute.waypoints);
     }
   };
 
@@ -300,6 +316,7 @@ export const createEmergencyResponseController = (
   return {
     update,
     triggerScenario,
+    updateWindConditions,
     pause,
     resume,
     replay,
@@ -307,6 +324,10 @@ export const createEmergencyResponseController = (
     getPhase: () => phase,
     isPaused: () => paused,
     getFireIntensityFactor: () => fireIntensityFactor,
+    getElapsedSeconds: () => elapsed,
+    isWaterAttackActive: () => waterAttack.isAttacking(),
+    getSuppressionProgress: () => waterAttack.getSuppressionProgress(),
+    getActiveRoute: () => activeRoute,
     getTelemetryStatus,
   };
 };
