@@ -412,3 +412,105 @@ const getOfflineThreatCalculations = (params: ThreatCalculateParams): ThreatResp
     };
   }
 };
+
+// ────────────────────────────────────────────────────────────────────────────
+// AI ENGINEER 2 — OPERATIONAL DECISION SUPPORT API (RESQ-ENG-PLAN-2026-002)
+// ────────────────────────────────────────────────────────────────────────────
+
+export interface DecisionSupportResponse {
+  provenance_hash: string;
+  execution_timestamp_utc: string;
+  operational_summary: {
+    primary_threat_level: string;
+    dominant_hazard_mechanism: string;
+    max_lethal_radius_m: number;
+    max_evacuation_radius_m: number;
+    optimal_ingress_bearing_deg: number;
+    optimal_ingress_cardinal: string;
+    recommended_standoff_distance_m: number;
+  };
+  severity_breakdown: Record<
+    string,
+    {
+      tier_name: string;
+      nominal_radius_m: number;
+      enclosed_area_m2: number;
+      thermal_threshold_kw_m2: number;
+      blast_threshold_kpa: number;
+      tactical_directive: string;
+    }
+  >;
+  directional_intelligence: {
+    optimal_sector: string;
+    optimal_bearing_deg: number;
+    upwind_bearing_deg: number;
+    downwind_bearing_deg: number;
+    exclusion_arc_start_deg: number;
+    exclusion_arc_end_deg: number;
+    sectors: Array<{
+      cardinal: string;
+      azimuth_deg: number;
+      exposure_score: number;
+      classification: string;
+      max_safe_approach_distance_m: number;
+      operational_advice: string;
+    }>;
+  };
+  sensitivity_analysis?: {
+    baseline_green_radius_m: number;
+    parameters: Array<{
+      parameter_name: string;
+      baseline_value: number;
+      perturbed_value: number;
+      delta_radius_m: number;
+      elasticity_percent: number;
+      driver_classification: string;
+    }>;
+  };
+  uncertainty_assessment?: {
+    nominal_radius_m: number;
+    p5_radius_m: number;
+    p50_radius_m: number;
+    p95_radius_m: number;
+    safety_buffer_margin_m: number;
+    confidence_rating: string;
+  };
+  explainability_report: {
+    zone_dimension_rationale: string;
+    spatial_asymmetry_rationale: string;
+    approach_rationale: string;
+    dominant_hazard_rationale: string;
+    scenario_comparison_rationale?: string;
+  };
+}
+
+export const fetchDecisionSupport = async (
+  params: ThreatCalculateParams
+): Promise<DecisionSupportResponse | null> => {
+  try {
+    const payload = {
+      scenario: {
+        facility_name: params.fuel_type === 'LPG' ? 'Facility A — LPG Spherical Tank' : 'Facility B — Petroleum Pool Fire',
+        latitude: params.latitude,
+        longitude: params.longitude,
+        tank_geometry: params.fuel_type === 'LPG' ? 'SPHERE' : 'VERTICAL_CYLINDER',
+        tank_diameter_m: params.pool_diameter_m || 15.0,
+        fill_fraction: 0.85,
+        fuel_type: params.fuel_type || 'LPG',
+        explosion_yield_factor: 0.04,
+        wind_speed_ms: params.wind_speed_ms,
+        wind_direction_deg: params.wind_direction_deg,
+      },
+      options: {
+        compute_sensitivity: true,
+        compute_uncertainty: true,
+        generate_explanation: true,
+      },
+    };
+    const res = await axios.post(`${API_BASE_URL}/decision-support/`, payload, { timeout: 4000 });
+    return res.data;
+  } catch {
+    return null;
+  }
+};
+
