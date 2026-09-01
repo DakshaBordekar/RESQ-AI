@@ -1,5 +1,5 @@
 import React, { useRef, useCallback } from 'react';
-import { Flame, Wind, Gauge, ShieldAlert, Compass, FlaskConical, Layers3 } from 'lucide-react';
+import { Flame, Wind, Gauge, Compass, FlaskConical, Layers3 } from 'lucide-react';
 import { ThreatCalculateParams, SUBSTANCE_PRESETS } from '../../services/threatApi';
 
 interface ThreatControlDockProps {
@@ -228,19 +228,6 @@ export const ThreatControlDock: React.FC<ThreatControlDockProps> = ({
         p-4 text-gray-100 font-mono flex flex-col gap-4 overflow-y-auto z-[500]
       "
     >
-      {/* ── Header ──────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-2 border-b border-slate-800 pb-3 shrink-0">
-        <div className="p-2 rounded-lg bg-red-950/80 border border-red-500/40">
-          <ShieldAlert className="w-5 h-5 text-red-400 animate-pulse" />
-        </div>
-        <div>
-          <div className="text-xs text-red-400 font-bold tracking-widest uppercase">
-            DER-02 THREAT CONTROL
-          </div>
-          <div className="text-xs text-gray-400">Physics & Geometry Engine</div>
-        </div>
-      </div>
-
       {/* ── Facility Configuration Buttons ──────────────────────────────── */}
       <div className="flex flex-col gap-2 shrink-0">
         <label className="text-[11px] text-gray-400 uppercase tracking-wider font-bold">
