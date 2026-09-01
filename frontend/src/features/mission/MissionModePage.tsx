@@ -45,10 +45,12 @@ import {
 
 interface MissionModePageProps {
   onBackToCommandCenter?: () => void;
+  onNavigateToBlueprint?: () => void;
 }
 
 export const MissionModePage: React.FC<MissionModePageProps> = ({
   onBackToCommandCenter,
+  onNavigateToBlueprint,
 }) => {
   // State
   const [selectedStrategy, setSelectedStrategy] = useState<MissionStrategy>('BALANCED_RESPONSE');
@@ -381,6 +383,15 @@ export const MissionModePage: React.FC<MissionModePageProps> = ({
                 <span>NEW MISSION</span>
               </button>
             </>
+          )}
+
+          {onNavigateToBlueprint && (
+            <button
+              onClick={onNavigateToBlueprint}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-950 hover:bg-cyan-900 border border-cyan-500/60 text-cyan-300 rounded-lg text-xs font-bold transition-all shadow hover:scale-105"
+            >
+              <span>BLUEPRINT IMPORT →</span>
+            </button>
           )}
         </div>
       </div>

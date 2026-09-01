@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     'apps.ai',
     'apps.analytics',
     'apps.threat_zone',
+    'apps.blueprint',
 ]
 
 MIDDLEWARE = [
@@ -88,7 +89,10 @@ WSGI_APPLICATION = 'config.wsgi.application'
 ASGI_APPLICATION = 'config.asgi.application'
 
 DATABASES = {
-    'default': env.db('DATABASE_URL', default='sqlite:///db.sqlite3')
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
+    }
 }
 
 AUTH_USER_MODEL = 'accounts.User'

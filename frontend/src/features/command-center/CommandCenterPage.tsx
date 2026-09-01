@@ -23,10 +23,12 @@ import {
   Maximize2,
   Minimize2,
   Users,
+  FileImage,
 } from 'lucide-react';
 
 interface CommandCenterPageProps {
   onNavigateToMission?: () => void;
+  onNavigateToBlueprint?: () => void;
 }
 
 // ── Default facility presets ───────────────────────────────────────────────
@@ -69,6 +71,7 @@ const INITIAL_PARAMS: ThreatCalculateParams = {
 
 export const CommandCenterPage: React.FC<CommandCenterPageProps> = ({
   onNavigateToMission,
+  onNavigateToBlueprint,
 }) => {
   const [params, setParams] = useState<ThreatCalculateParams>(INITIAL_PARAMS);
   const [threatData, setThreatData] = useState<ThreatResponse | null>(null);
@@ -297,6 +300,18 @@ export const CommandCenterPage: React.FC<CommandCenterPageProps> = ({
               >
                 <Users className="w-3.5 h-3.5 text-red-400 animate-pulse" />
                 <span>MISSION MODE</span>
+              </button>
+            )}
+
+            {/* Blueprint to Digital Twin Switcher */}
+            {onNavigateToBlueprint && (
+              <button
+                onClick={onNavigateToBlueprint}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-950 hover:bg-cyan-900 border border-cyan-500/60 text-cyan-300 rounded-lg text-xs font-bold transition-all shadow hover:scale-105"
+                title="Open Blueprint-to-Digital-Twin Importer"
+              >
+                <FileImage className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+                <span>BLUEPRINT IMPORT</span>
               </button>
             )}
           </div>

@@ -31,10 +31,12 @@ urlpatterns = [
     path('api/v1/routes/calculate/', RouteCalculateView.as_view(), name='route-calculate'),
     path('api/v1/optimization/run/', OptimizationRunView.as_view(), name='optimization-run'),
     path('api/v1/analytics/summary/', AnalyticsSummaryView.as_view(), name='analytics-summary'),
-    path('api/v1/action-plan/generate/', ActionPlanGenerateView.as_view(), name='action-plan-generate'),
     # DER-02 Threat-Zone Estimation APIs
     path('api/v1/threat-zone/', include('apps.threat_zone.urls')),
     path('api/threat-zone/', include('apps.threat_zone.urls')),
+    # Blueprint ML Perception & Digital Twin APIs
+    path('api/v1/blueprint/', include('apps.blueprint.urls')),
+    path('api/blueprint/', include('apps.blueprint.urls')),
     # ViewSet Router
     path('api/v1/', include(router.urls)),
 ]
