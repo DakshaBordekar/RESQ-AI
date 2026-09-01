@@ -270,10 +270,7 @@ export const createProceduralFire = (
   // ──────────────────────────────────────────────────────────────────────────
   const fireLight = new THREE.PointLight(0xf97316, 8.5, 320, 1.2);
   fireLight.position.set(0, flameHeight * 0.4, 0);
-  fireLight.castShadow = true;
-  fireLight.shadow.bias = -0.0004;
-  fireLight.shadow.mapSize.width = 1024;
-  fireLight.shadow.mapSize.height = 1024;
+  fireLight.castShadow = false; // High-performance dynamic illumination without 6-pass shadow overhead
   group.add(fireLight);
 
   const setFlameParameters = (hM: number, tDeg: number, wDirDeg: number, wSpeedMs: number) => {

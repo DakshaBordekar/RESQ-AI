@@ -76,9 +76,9 @@ export const createBlastDebrisSystem = (scene: THREE.Scene): BlastDebrisComponen
 
   const debrisInstMesh = new THREE.InstancedMesh(debrisGeo, debrisMat, debrisCount);
   debrisInstMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-  debrisInstMesh.castShadow = true;
-  debrisInstMesh.receiveShadow = true;
-  debrisInstMesh.visible = false; // Hidden in IDLE!
+  debrisInstMesh.castShadow = false;
+  debrisInstMesh.receiveShadow = false;
+  debrisInstMesh.visible = false;
   group.add(debrisInstMesh);
 
   interface DebrisParticle {

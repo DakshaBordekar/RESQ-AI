@@ -1,11 +1,11 @@
 // ────────────────────────────────────────────────────────────────────────────
-// RESQ-AI DER-02 Real-Time Firefighting Water Attack & Steam Generation VFX Engine
-// Continuous pressurized jet stream, parabolic ballistic arc, nozzle spray envelope,
-// localized impact steam billowing puffs, and dynamic fire suppression physics
+// RESQ-AI DER-02 High-Performance Firefighting Water Attack & Steam VFX Engine
+// Zero per-frame memory allocations, shader-driven laminar flow, pooled particles
 // ────────────────────────────────────────────────────────────────────────────
 
 import * as THREE from 'three';
 import { createSmokePuffTexture } from '../fire/vfxTextures';
+import { getDownwindVector } from '../utils/coordinateMath';
 
 export interface WaterAttackComponents {
   group: THREE.Group;
@@ -19,7 +19,7 @@ export interface WaterAttackComponents {
     windDirDeg: number,
     windSpeedMs: number
   ) => void;
-  getSuppressionProgress: () => number; // 0.0 (unsuppressed) to 1.0 (fully extinguished)
+  getSuppressionProgress: () => number;
   isAttacking: () => boolean;
   reset: () => void;
 }
@@ -29,8 +29,14 @@ export const createWaterAttackSystem = (scene: THREE.Scene): WaterAttackComponen
   group.visible = false;
 
   let active = false;
-  let suppressionProgress = 0; // 0 to 1
-  const suppressionRate = 0.12; // ~8.5 seconds for full suppression
+  let suppressionProgress = 0;
+  const suppressionRate = 0.12; // ~8.3 seconds for full suppression
+
+  // Cached positions to avoid rebuilding curve if endpoints have not moved
+  let lastNozzlePos = new THREE.Vector3(-999, -999, -999);
+  let lastTargetPos = new THREE.Vector3(-999, -999, -999);
+  let lastWindDir = -999;
+  let lastWindSpeed = -999;
 
   // ──────────────────────────────────────────────────────────────────────────
   // 1. BALLISTIC LAMINAR JET STREAM TUBE
@@ -41,7 +47,7 @@ export const createWaterAttackSystem = (scene: THREE.Scene): WaterAttackComponen
     initialCurvePoints.push(new THREE.Vector3(0, 0, 0));
   }
   let curve = new THREE.CatmullRomCurve3(initialCurvePoints);
-  let streamGeo = new THREE.TubeGeometry(curve, 32, 0.45, 8, false);
+  let streamGeo = new THREE.TubeGeometry(curve, 28, 0.45, 8, false);
 
   const streamMat = new THREE.ShaderMaterial({
     uniforms: {
@@ -58,7 +64,6 @@ export const createWaterAttackSystem = (scene: THREE.Scene): WaterAttackComponen
       uniform float time;
       varying vec2 vUv;
       void main() {
-        // High-velocity flowing water ripples
         float flow = sin(vUv.x * 40.0 - time * 35.0) * 0.15;
         float core = 1.0 - abs(vUv.y - 0.5) * 2.0;
         vec3 col = mix(vec3(0.6, 0.85, 1.0), vec3(0.9, 0.98, 1.0), core + flow);
@@ -76,9 +81,9 @@ export const createWaterAttackSystem = (scene: THREE.Scene): WaterAttackComponen
   group.add(streamMesh);
 
   // ──────────────────────────────────────────────────────────────────────────
-  // 2. PRESSURIZED SPRAY DROPLET PARTICLES
+  // 2. PRESSURIZED SPRAY DROPLET PARTICLES (Pre-allocated pool)
   // ──────────────────────────────────────────────────────────────────────────
-  const sprayCount = 380;
+  const sprayCount = 300;
   const sprayGeo = new THREE.BufferGeometry();
   const sprayPositions = new Float32Array(sprayCount * 3);
   const sprayProgress = new Float32Array(sprayCount);
@@ -106,9 +111,9 @@ export const createWaterAttackSystem = (scene: THREE.Scene): WaterAttackComponen
   group.add(sprayMesh);
 
   // ──────────────────────────────────────────────────────────────────────────
-  // 3. LOCALIZED BILLOWING STEAM / WHITE VAPOR UPON IMPACT
+  // 3. LOCALIZED BILLOWING IMPACT STEAM (Pre-allocated pool)
   // ──────────────────────────────────────────────────────────────────────────
-  const steamCount = 260;
+  const steamCount = 200;
   const steamGeo = new THREE.BufferGeometry();
   const steamPositions = new Float32Array(steamCount * 3);
   const steamVelocities = new Float32Array(steamCount * 3);
@@ -118,24 +123,24 @@ export const createWaterAttackSystem = (scene: THREE.Scene): WaterAttackComponen
   const steamTex = createSmokePuffTexture();
 
   for (let i = 0; i < steamCount; i++) {
-    steamMaxLives[i] = 2.5 + Math.random() * 2.0;
+    steamMaxLives[i] = 2.2 + Math.random() * 1.8;
     steamLifespans[i] = Math.random() * steamMaxLives[i];
     steamPositions[i * 3 + 0] = 0;
     steamPositions[i * 3 + 1] = 6;
     steamPositions[i * 3 + 2] = 0;
 
-    steamVelocities[i * 3 + 0] = (Math.random() - 0.5) * 8.0;
-    steamVelocities[i * 3 + 1] = 6.0 + Math.random() * 12.0;
-    steamVelocities[i * 3 + 2] = (Math.random() - 0.5) * 8.0;
+    steamVelocities[i * 3 + 0] = (Math.random() - 0.5) * 7.0;
+    steamVelocities[i * 3 + 1] = 5.0 + Math.random() * 10.0;
+    steamVelocities[i * 3 + 2] = (Math.random() - 0.5) * 7.0;
   }
 
   steamGeo.setAttribute('position', new THREE.BufferAttribute(steamPositions, 3));
 
   const steamMat = new THREE.PointsMaterial({
     map: steamTex,
-    size: 22.0,
+    size: 20.0,
     transparent: true,
-    opacity: 0.65,
+    opacity: 0.6,
     blending: THREE.NormalBlending,
     depthWrite: false,
   });
@@ -143,28 +148,64 @@ export const createWaterAttackSystem = (scene: THREE.Scene): WaterAttackComponen
   const steamMesh = new THREE.Points(steamGeo, steamMat);
   group.add(steamMesh);
 
-  // Impact Ground Splash Ring
-  const splashGeo = new THREE.RingGeometry(1, 8, 32);
+  // ──────────────────────────────────────────────────────────────────────────
+  // 4. IMPACT GROUND SPLASH
+  // ──────────────────────────────────────────────────────────────────────────
+  const splashGeo = new THREE.RingGeometry(1, 8, 24);
   const splashMat = new THREE.MeshBasicMaterial({
     color: 0xbae6fd,
     side: THREE.DoubleSide,
     transparent: true,
-    opacity: 0.45,
+    opacity: 0.4,
   });
   const splashMesh = new THREE.Mesh(splashGeo, splashMat);
   splashMesh.rotation.x = -Math.PI / 2;
   splashMesh.position.set(0, 0.7, 0);
   group.add(splashMesh);
 
+  const rebuildArcGeometry = (
+    nozzlePos: THREE.Vector3,
+    targetPos: THREE.Vector3,
+    windDirDeg: number,
+    windSpeedMs: number
+  ) => {
+    const arcPoints: THREE.Vector3[] = [];
+    const apexHeight = Math.max(nozzlePos.y, targetPos.y) + 12.0;
+
+    const downwind = getDownwindVector(windDirDeg);
+    const windDrift = new THREE.Vector3(downwind.x, 0, downwind.z).multiplyScalar(windSpeedMs * 0.15);
+
+    for (let i = 0; i <= streamSegments; i++) {
+      const t = i / streamSegments;
+      const pt = new THREE.Vector3().lerpVectors(nozzlePos, targetPos, t);
+      pt.y += Math.sin(t * Math.PI) * (apexHeight - nozzlePos.y);
+      pt.addScaledVector(windDrift, Math.sin(t * Math.PI));
+      arcPoints.push(pt);
+    }
+
+    curve = new THREE.CatmullRomCurve3(arcPoints);
+    streamMesh.geometry.dispose();
+    streamMesh.geometry = new THREE.TubeGeometry(curve, 28, 0.45, 8, false);
+
+    lastNozzlePos.copy(nozzlePos);
+    lastTargetPos.copy(targetPos);
+    lastWindDir = windDirDeg;
+    lastWindSpeed = windSpeedMs;
+  };
+
   const startAttack = (nozzlePos: THREE.Vector3, targetPos: THREE.Vector3) => {
     active = true;
     group.visible = true;
+    rebuildArcGeometry(nozzlePos, targetPos, 135, 8.5);
   };
 
   const stopAttack = () => {
     active = false;
     group.visible = false;
   };
+
+  // Reusable dummy vector to avoid runtime GC allocations
+  const tempCurvePoint = new THREE.Vector3();
 
   const update = (
     delta: number,
@@ -183,51 +224,40 @@ export const createWaterAttackSystem = (scene: THREE.Scene): WaterAttackComponen
       suppressionProgress = Math.min(1.0, suppressionProgress + suppressionRate * delta);
     }
 
-    // 2. Build Ballistic Parabolic Arc between Nozzle and Target
-    const arcPoints: THREE.Vector3[] = [];
-    const apexHeight = Math.max(nozzlePos.y, targetPos.y) + 12.0;
-
-    const wRad = (windDirDeg * Math.PI) / 180;
-    const windDrift = new THREE.Vector3(-Math.sin(wRad), 0, -Math.cos(wRad)).multiplyScalar(
-      windSpeedMs * 0.15
-    );
-
-    for (let i = 0; i <= streamSegments; i++) {
-      const t = i / streamSegments;
-      // Parabolic interpolation
-      const pt = new THREE.Vector3().lerpVectors(nozzlePos, targetPos, t);
-      pt.y += Math.sin(t * Math.PI) * (apexHeight - nozzlePos.y);
-      pt.addScaledVector(windDrift, Math.sin(t * Math.PI));
-      arcPoints.push(pt);
+    // 2. Only rebuild curve geometry if endpoints or wind have significantly changed
+    if (
+      nozzlePos.distanceToSquared(lastNozzlePos) > 0.05 ||
+      targetPos.distanceToSquared(lastTargetPos) > 0.05 ||
+      Math.abs(windDirDeg - lastWindDir) > 1.0 ||
+      Math.abs(windSpeedMs - lastWindSpeed) > 0.5
+    ) {
+      rebuildArcGeometry(nozzlePos, targetPos, windDirDeg, windSpeedMs);
     }
 
-    curve = new THREE.CatmullRomCurve3(arcPoints);
-    streamMesh.geometry.dispose();
-    streamMesh.geometry = new THREE.TubeGeometry(curve, 32, 0.45, 8, false);
-
-    // 3. Update Pressurized Droplet Envelope
+    // 3. Update Pressurized Droplet Envelope (Zero allocations in loop)
     const sprayPosAttr = sprayGeo.getAttribute('position') as THREE.BufferAttribute;
     for (let i = 0; i < sprayCount; i++) {
       sprayProgress[i] += delta * 2.8;
       if (sprayProgress[i] > 1.0) sprayProgress[i] -= 1.0;
 
       const t = sprayProgress[i];
-      const curvePt = curve.getPoint(t);
+      curve.getPoint(t, tempCurvePoint);
       const spread = t * 2.5;
 
       sprayPosAttr.setXYZ(
         i,
-        curvePt.x + sprayOffsets[i * 3 + 0] * spread,
-        curvePt.y + sprayOffsets[i * 3 + 1] * spread,
-        curvePt.z + sprayOffsets[i * 3 + 2] * spread
+        tempCurvePoint.x + sprayOffsets[i * 3 + 0] * spread,
+        tempCurvePoint.y + sprayOffsets[i * 3 + 1] * spread,
+        tempCurvePoint.z + sprayOffsets[i * 3 + 2] * spread
       );
     }
     sprayPosAttr.needsUpdate = true;
 
     // 4. Update Billowing Impact Steam Clouds
     const steamPosAttr = steamGeo.getAttribute('position') as THREE.BufferAttribute;
-    const windVx = -Math.sin(wRad) * (windSpeedMs * 0.8);
-    const windVz = -Math.cos(wRad) * (windSpeedMs * 0.8);
+    const downwind = getDownwindVector(windDirDeg);
+    const windVx = downwind.x * (windSpeedMs * 0.8);
+    const windVz = downwind.z * (windSpeedMs * 0.8);
 
     for (let i = 0; i < steamCount; i++) {
       steamLifespans[i] += delta;
@@ -248,7 +278,7 @@ export const createWaterAttackSystem = (scene: THREE.Scene): WaterAttackComponen
     }
     steamPosAttr.needsUpdate = true;
 
-    // Ground splash animation
+    // 5. Ground splash animation
     const splashPulse = 1.0 + Math.sin(time * 18.0) * 0.2;
     splashMesh.scale.set(splashPulse, splashPulse, splashPulse);
   };
@@ -257,6 +287,7 @@ export const createWaterAttackSystem = (scene: THREE.Scene): WaterAttackComponen
     active = false;
     group.visible = false;
     suppressionProgress = 0;
+    lastNozzlePos.set(-999, -999, -999);
   };
 
   scene.add(group);

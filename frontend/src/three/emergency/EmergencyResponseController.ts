@@ -1,8 +1,8 @@
 // ────────────────────────────────────────────────────────────────────────────
 // RESQ-AI DER-02 Master Emergency Response & Fire Suppression Sequence Controller
 // Supports both Facility A (Pressurized LPG Sphere BLEVE) and Facility B (Petroleum Pool Fire):
-// CALM -> INCIDENT (BLEVE / POOL IGNITION) -> EMERGENCY_DISPATCH (A* Road Graph Navigation)
-// -> STAGED -> WATER_ATTACK -> SUPPRESSION (100% -> 0%) -> EXTINGUISHED (Permanent Safe Halt)
+// CALM -> INCIDENT -> EMERGENCY_DISPATCH (A* Road Graph Navigation)
+// -> STAGED -> ROOFTOP WATER ATTACK -> SUPPRESSION (100% -> 0%) -> EXTINGUISHED (Permanent Safe Halt)
 // ────────────────────────────────────────────────────────────────────────────
 
 import * as THREE from 'three';
@@ -10,6 +10,7 @@ import { BlevePhase } from '../../simulation/types';
 import { FireTruckComponents } from './FireTruck';
 import { WaterAttackComponents } from './WaterAttackSystem';
 import { RoadNetworkComponents, EmergencyRouteResult } from '../environment/RoadNetwork';
+import { SecondaryHazardsComponents } from '../environment/SecondaryHazardsSystem';
 
 export interface EmergencyResponseComponents {
   update: (delta: number, time: number, windDirDeg: number, windSpeedMs: number) => void;
@@ -48,6 +49,7 @@ export const createEmergencyResponseController = (
   fireTruck: FireTruckComponents,
   waterAttack: WaterAttackComponents,
   roadNetwork: RoadNetworkComponents,
+  secondaryHazards: SecondaryHazardsComponents,
   onPhaseChange?: (phase: BlevePhase) => void,
   onEvent?: EmergencyEventHook
 ): EmergencyResponseComponents => {
@@ -84,6 +86,7 @@ export const createEmergencyResponseController = (
 
     fireTruck.reset();
     waterAttack.reset();
+    secondaryHazards.triggerHazards();
 
     if (scenarioType === 'FACILITY_A_LPG') {
       setPhaseInternal('THERMAL_STRESS');
@@ -110,6 +113,7 @@ export const createEmergencyResponseController = (
     setPhaseInternal('IDLE');
     fireTruck.reset();
     waterAttack.reset();
+    secondaryHazards.reset();
   };
 
   const replay = () => {
@@ -118,6 +122,8 @@ export const createEmergencyResponseController = (
   };
 
   const update = (delta: number, time: number, windDirDeg: number, windSpeedMs: number) => {
+    secondaryHazards.update(delta, time);
+
     if (phase === 'IDLE' || paused) return;
 
     elapsed += delta;
@@ -154,7 +160,9 @@ export const createEmergencyResponseController = (
       } else if (elapsed < 19.0 || (fireTruck.isStaged() && elapsed < 20.0)) {
         if (phase !== 'TRUCK_STAGED') {
           setPhaseInternal('TRUCK_STAGED');
-          if (onEvent) onEvent('FIRE_BRIGADE_STAGED');
+          if (onEvent) {
+            onEvent('FIRE_BRIGADE_STAGED');
+          }
         }
         fireTruck.update(delta, time);
         fireTruck.aimTurretAt(targetHotspotPos);
@@ -192,15 +200,12 @@ export const createEmergencyResponseController = (
       // FACILITY B: SUSTAINED POOL FIRE & SUPPRESSION LIFECYCLE
       // ──────────────────────────────────────────────────────────────────────
       if (elapsed < 2.0) {
-        // Phase 1: Pool Ignition & Flame Rise
         setPhaseInternal('IGNITION');
         fireIntensityFactor = Math.min(1.0, elapsed / 2.0);
       } else if (elapsed < 8.0) {
-        // Phase 2: Fully Developed Sustained Pool Fire
         setPhaseInternal('SUSTAINED_FIRE');
         fireIntensityFactor = 1.0;
       } else if (elapsed < 16.5 && !fireTruck.isStaged()) {
-        // Phase 3: Emergency Dispatch via Upwind Road Gateway
         if (phase !== 'EMERGENCY_RESPONSE') {
           setPhaseInternal('EMERGENCY_RESPONSE');
           activeRoute = roadNetwork.findEmergencyRoute(safeHeading);
@@ -210,16 +215,16 @@ export const createEmergencyResponseController = (
         fireTruck.update(delta, time);
         fireIntensityFactor = 1.0;
       } else if (elapsed < 19.0 || (fireTruck.isStaged() && elapsed < 20.0)) {
-        // Phase 4: Staged outside Zone 1 & Aiming Turret at Pool Base
         if (phase !== 'TRUCK_STAGED') {
           setPhaseInternal('TRUCK_STAGED');
-          if (onEvent) onEvent('FIRE_BRIGADE_STAGED');
+          if (onEvent) {
+            onEvent('FIRE_BRIGADE_STAGED');
+          }
         }
         fireTruck.update(delta, time);
         fireTruck.aimTurretAt(targetHotspotPos);
         fireIntensityFactor = 1.0;
       } else if (elapsed < 27.5) {
-        // Phase 5: High-Pressure Water Monitor Attack & Progressive Suppression
         if (phase !== 'WATER_ATTACK') {
           setPhaseInternal('WATER_ATTACK');
           waterAttack.startAttack(fireTruck.getNozzleWorldPosition(), targetHotspotPos);
@@ -234,7 +239,6 @@ export const createEmergencyResponseController = (
         const supProgress = waterAttack.getSuppressionProgress();
         fireIntensityFactor = Math.max(0, 1.0 - supProgress);
       } else if (elapsed < 30.0) {
-        // Phase 6: Pool Fire Extinguished & Steam Cool-Down
         if (phase !== 'EXTINGUISHED') {
           setPhaseInternal('EXTINGUISHED');
           waterAttack.stopAttack();
@@ -243,7 +247,6 @@ export const createEmergencyResponseController = (
         fireIntensityFactor = 0;
         fireTruck.update(delta, time);
       } else {
-        // Phase 7: Stabilized Safe Aftermath
         if (phase !== 'AFTERMATH') {
           setPhaseInternal('AFTERMATH');
         }

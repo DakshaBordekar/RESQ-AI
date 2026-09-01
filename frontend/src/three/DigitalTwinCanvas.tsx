@@ -31,6 +31,7 @@ import { createHazardInspector } from './hazard/HazardInspector';
 import { createCinematicCameraController } from './camera/CinematicCameraController';
 import { createFireTruck } from './emergency/FireTruck';
 import { createWaterAttackSystem } from './emergency/WaterAttackSystem';
+import { createSecondaryHazardsSystem } from './environment/SecondaryHazardsSystem';
 import { createEmergencyResponseController } from './emergency/EmergencyResponseController';
 import { getSafeApproachHeading } from './utils/coordinateMath';
 import { DigitalTwinHUD } from './hud/DigitalTwinHUD';
@@ -99,7 +100,7 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
     const scene = new THREE.Scene();
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -166,6 +167,7 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
     // 9. Fire Brigade & Water Attack Systems
     const fireTruck = createFireTruck(scene);
     const waterAttack = createWaterAttackSystem(scene);
+    const secondaryHazards = createSecondaryHazardsSystem(scene);
 
     // 10. Deterministic Incident & Suppression Sequence Controller
     const bleveSystem = createBleveExplosion(scene, (newPhase) => {
@@ -176,6 +178,7 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
       fireTruck,
       waterAttack,
       roadNetwork,
+      secondaryHazards,
       (newPhase) => {
         setBlevePhase(newPhase);
       }
@@ -265,11 +268,16 @@ export const DigitalTwinCanvas: React.FC<DigitalTwinCanvasProps> = ({
       wind_direction_deg: windDir,
     }));
 
+    let lastProbeUpdate = 0;
     const onPointerMove = (e: MouseEvent) => {
-      const probe = inspector.handlePointerMove(e, container, cameraController.camera);
-      setProbePoint(probe);
+      const now = performance.now();
+      if (now - lastProbeUpdate > 55) { // Throttled to ~18 updates/sec for smooth 60fps rendering
+        lastProbeUpdate = now;
+        const probe = inspector.handlePointerMove(e, container, cameraController.camera);
+        setProbePoint(probe);
+      }
     };
-    container.addEventListener('mousemove', onPointerMove);
+    container.addEventListener('mousemove', onPointerMove, { passive: true });
 
     const onDblClick = (e: MouseEvent) => {
       const rect = container.getBoundingClientRect();
