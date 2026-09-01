@@ -406,3 +406,80 @@ export const evaluateMissionModeScore = (
     ],
   };
 };
+
+/**
+ * Derives casualty coordinates and location names from actual detected blueprint facility assets
+ */
+export const getFacilityCasualties = (
+  facilityAssets: Array<{ id: string; name: string; type: string; worldPos: { x: number; y: number; z: number } }>
+): MissionCasualty[] => {
+  if (!facilityAssets || facilityAssets.length === 0) return INITIAL_MISSION_CASUALTIES;
+
+  const pumpHouse = facilityAssets.find((a) => a.type === 'FIRE_PUMP_HOUSE' || a.type === 'PUMP_HOUSE' || a.name.includes('Pump'));
+  const warehouse = facilityAssets.find((a) => a.type === 'WAREHOUSE' || a.name.includes('Warehouse'));
+  const controlRoom = facilityAssets.find((a) => a.type === 'CONTROL_ROOM' || a.name.includes('Control'));
+  const substation = facilityAssets.find((a) => a.type === 'ELECTRICAL_SUBSTATION' || a.name.includes('Substation'));
+  const bulletTank = facilityAssets.find((a) => a.type === 'LPG_BULLET' || a.type === 'LPG_BULLET_TANK' || a.name.includes('Bullet'));
+
+  const candidates = [
+    {
+      asset: pumpHouse || facilityAssets[Math.min(1, facilityAssets.length - 1)],
+      role: 'Senior LPG Pump Operator',
+      name: 'Vikram Patel',
+      priority: 'P1_CRITICAL' as CasualtyPriority,
+      window: 32,
+    },
+    {
+      asset: bulletTank || facilityAssets[Math.min(2, facilityAssets.length - 1)],
+      role: 'West Storage Field Technician',
+      name: 'Elena Rostova',
+      priority: 'P2_URGENT' as CasualtyPriority,
+      window: 65,
+    },
+    {
+      asset: controlRoom || facilityAssets[0],
+      role: 'Fractionation Process Engineer',
+      name: 'Marcus Chen',
+      priority: 'P1_CRITICAL' as CasualtyPriority,
+      window: 48,
+    },
+    {
+      asset: substation || facilityAssets[Math.min(3, facilityAssets.length - 1)],
+      role: 'Electrical Substation Specialist',
+      name: 'Rajesh Kumar',
+      priority: 'P3_STABLE' as CasualtyPriority,
+      window: 110,
+    },
+    {
+      asset: warehouse || facilityAssets[Math.min(4, facilityAssets.length - 1)],
+      role: 'Logistics Facility Supervisor',
+      name: 'Sarah Jenkins',
+      priority: 'P3_STABLE' as CasualtyPriority,
+      window: 180,
+    },
+  ];
+
+  return candidates.map((cand, idx) => {
+    const asset = cand.asset;
+    const dist = Math.hypot(asset.worldPos.x, asset.worldPos.z);
+    const exposure = Math.round((180 / Math.max(15, dist)) * 10) / 10;
+
+    return {
+      id: `CAS-0${idx + 1}`,
+      name: cand.name,
+      role: cand.role,
+      locationName: asset.name,
+      worldPos: [asset.worldPos.x, 0, asset.worldPos.z] as [number, number, number],
+      status: cand.priority === 'P1_CRITICAL' ? ('TRAPPED' as const) : cand.priority === 'P2_URGENT' ? ('INJURED' as const) : ('EXPOSED' as const),
+      exposureKwM2: exposure,
+      distanceFromHazardM: Math.round(dist),
+      survivabilityWindowSec: cand.window,
+      initialWindowSec: cand.window,
+      priority: cand.priority,
+      evacuationGateId: 'GATE_NORTH',
+      rescueProgressPct: 0,
+      extracted: false,
+    };
+  });
+};
+

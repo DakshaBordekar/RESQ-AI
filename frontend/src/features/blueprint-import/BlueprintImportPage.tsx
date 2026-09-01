@@ -24,6 +24,7 @@ import { DetectionReviewPanel } from './DetectionReviewPanel';
 import { ScaleReferenceModal } from './ScaleReferenceModal';
 import { TwinSimulationHUD } from './TwinSimulationHUD';
 import { BlueprintDigitalTwinScene } from '../../three/blueprint/BlueprintDigitalTwinScene';
+import { BlueprintRescueMissionView } from './BlueprintRescueMissionView';
 import {
   Layers,
   Sparkles,
@@ -39,6 +40,7 @@ import {
   Activity,
   Columns,
   Maximize2,
+  HeartPulse,
 } from 'lucide-react';
 
 interface BlueprintImportPageProps {
@@ -101,7 +103,9 @@ export const BlueprintImportPage: React.FC<BlueprintImportPageProps> = ({
   const [windSpeedMs, setWindSpeedMs] = useState<number>(8.5);
 
   // View Layout in Simulation Stage
-  const [simulationViewMode, setSimulationViewMode] = useState<'SPLIT' | '3D_TWIN' | '2D_BLUEPRINT'>('SPLIT');
+  const [simulationViewMode, setSimulationViewMode] = useState<
+    'SPLIT' | '3D_TWIN' | '2D_BLUEPRINT' | 'RESCUE_MISSION'
+  >('SPLIT');
 
   // Compute Master Simulation Result via Shared Engine (Pure, Deterministic, Reactive)
   const simulationResult = useMemo(() => {
@@ -354,6 +358,18 @@ export const BlueprintImportPage: React.FC<BlueprintImportPageProps> = ({
               >
                 2D BLUEPRINT
               </button>
+              <button
+                onClick={() => setSimulationViewMode('RESCUE_MISSION')}
+                className={`px-2 py-1 rounded font-bold transition-colors flex items-center gap-1 ${
+                  simulationViewMode === 'RESCUE_MISSION'
+                    ? 'bg-red-600 text-white shadow ring-1 ring-red-400'
+                    : 'text-red-400 hover:text-red-300'
+                }`}
+                title="2D Blueprint Rescue Mission Command"
+              >
+                <HeartPulse className="w-3 h-3" />
+                <span>RESCUE MISSION</span>
+              </button>
             </div>
           )}
 
@@ -470,8 +486,20 @@ export const BlueprintImportPage: React.FC<BlueprintImportPageProps> = ({
         {/* STAGE 5: INTERACTIVE SHARED PHYSICS TACTICAL SIMULATION */}
         {currentStage === 'SIMULATE' && schema && (
           <div className="relative w-full h-full">
-            {/* Split Screen Layout */}
-            {simulationViewMode === 'SPLIT' && blueprintImageUrl ? (
+            {/* View Mode Switching */}
+            {simulationViewMode === 'RESCUE_MISSION' && blueprintImageUrl ? (
+              <div className="w-full h-full">
+                <BlueprintRescueMissionView
+                  blueprintImageUrl={blueprintImageUrl}
+                  schema={schema}
+                  windDirectionDeg={windDirectionDeg}
+                  windSpeedMs={windSpeedMs}
+                  simulationResult={simulationResult}
+                  onChangeWindDirection={setWindDirectionDeg}
+                  onChangeWindSpeed={setWindSpeedMs}
+                />
+              </div>
+            ) : simulationViewMode === 'SPLIT' && blueprintImageUrl ? (
               <div className="w-full h-full grid grid-cols-1 lg:grid-cols-12 gap-3">
                 {/* Left 5 Columns: 2D Blueprint with Live Shared Hazard Overlay */}
                 <div className="lg:col-span-5 h-full">
@@ -531,36 +559,38 @@ export const BlueprintImportPage: React.FC<BlueprintImportPageProps> = ({
               </div>
             )}
 
-            {/* Tactical Simulation HUD & What-If Parameter Controls */}
-            <TwinSimulationHUD
-              schema={schema}
-              selectedAssetId={selectedAsset?.id || null}
-              activeIncidentAssetId={activeIncidentAssetId}
-              activeIncidentType={activeIncidentType}
-              isSimulating={isSimulating}
-              simulationPhase={simulationPhase}
-              activeFireCount={activeFireCount}
-              totalExplosionCount={totalExplosionCount}
-              extinguishedCount={extinguishedCount}
-              fuelType={fuelType}
-              fillFraction={fillFraction}
-              tankDiameterM={tankDiameterM}
-              tankLengthM={tankLengthM}
-              tankHeightM={tankHeightM}
-              windDirectionDeg={windDirectionDeg}
-              windSpeedMs={windSpeedMs}
-              simulationResult={simulationResult}
-              onChangeFuelType={setFuelType}
-              onChangeFillFraction={setFillFraction}
-              onChangeTankDiameter={setTankDiameterM}
-              onChangeTankLength={setTankLengthM}
-              onChangeTankHeight={setTankHeightM}
-              onChangeWindDirection={setWindDirectionDeg}
-              onChangeWindSpeed={setWindSpeedMs}
-              onTriggerIncident={handleTriggerIncident}
-              onDeployFireBrigade={handleDeployFireBrigade}
-              onResetSimulation={handleResetSimulation}
-            />
+            {/* Tactical Simulation HUD & What-If Parameter Controls (Shown in SPLIT, 3D, and 2D modes) */}
+            {simulationViewMode !== 'RESCUE_MISSION' && (
+              <TwinSimulationHUD
+                schema={schema}
+                selectedAssetId={selectedAsset?.id || null}
+                activeIncidentAssetId={activeIncidentAssetId}
+                activeIncidentType={activeIncidentType}
+                isSimulating={isSimulating}
+                simulationPhase={simulationPhase}
+                activeFireCount={activeFireCount}
+                totalExplosionCount={totalExplosionCount}
+                extinguishedCount={extinguishedCount}
+                fuelType={fuelType}
+                fillFraction={fillFraction}
+                tankDiameterM={tankDiameterM}
+                tankLengthM={tankLengthM}
+                tankHeightM={tankHeightM}
+                windDirectionDeg={windDirectionDeg}
+                windSpeedMs={windSpeedMs}
+                simulationResult={simulationResult}
+                onChangeFuelType={setFuelType}
+                onChangeFillFraction={setFillFraction}
+                onChangeTankDiameter={setTankDiameterM}
+                onChangeTankLength={setTankLengthM}
+                onChangeTankHeight={setTankHeightM}
+                onChangeWindDirection={setWindDirectionDeg}
+                onChangeWindSpeed={setWindSpeedMs}
+                onTriggerIncident={handleTriggerIncident}
+                onDeployFireBrigade={handleDeployFireBrigade}
+                onResetSimulation={handleResetSimulation}
+              />
+            )}
           </div>
         )}
       </div>
