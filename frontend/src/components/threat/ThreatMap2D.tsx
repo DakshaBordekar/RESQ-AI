@@ -1,5 +1,16 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { ThreatResponse } from '../../services/threatApi';
+import { getActiveMapTileProvider } from '../../services/mapProvider';
+
+// Fix leaflet default icon asset paths
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
 
 interface ThreatMap2DProps {
   threatData: ThreatResponse | null;
@@ -9,7 +20,7 @@ interface ThreatMap2DProps {
   mapRef?: React.MutableRefObject<any>;
 }
 
-// Zone rendering config — innermost layers last (paint on top)
+// Zone rendering config — outermost layers first, innermost last (paint on top)
 const ZONE_STYLES: Array<{
   key: keyof ThreatResponse['threat_bands'];
   color: string;
@@ -29,7 +40,7 @@ const ZONE_STYLES: Array<{
   {
     key: 'yellow_injury',
     color: '#eab308',
-    fillOpacity: 0.20,
+    fillOpacity: 0.22,
     weight: 2,
     label: 'Zone 3 — Injury',
     threshold: '4.7 – 12.5 kW/m²',
@@ -37,7 +48,7 @@ const ZONE_STYLES: Array<{
   {
     key: 'orange_serious',
     color: '#f97316',
-    fillOpacity: 0.30,
+    fillOpacity: 0.32,
     weight: 2,
     label: 'Zone 2 — Serious',
     threshold: '12.5 – 37.5 kW/m²',
@@ -60,15 +71,18 @@ export const ThreatMap2D: React.FC<ThreatMap2DProps> = ({
   mapRef,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<any>(null);
-  const layerGroupRef = useRef<any>(null);
+  const mapInstanceRef = useRef<L.Map | null>(null);
+  const layerGroupRef = useRef<L.LayerGroup | null>(null);
 
   // ── Initialise Leaflet map once ──────────────────────────────────────────
   useEffect(() => {
-    if (!containerRef.current || typeof window === 'undefined') return;
-    const L = (window as any).L;
-    if (!L) return;
+    if (!containerRef.current) return;
     if (mapInstanceRef.current) return; // already initialised
+
+    // React 18 StrictMode double-mount safeguard
+    if ((containerRef.current as any)._leaflet_id) {
+      (containerRef.current as any)._leaflet_id = null;
+    }
 
     const map = L.map(containerRef.current, {
       center: [facilityLat, facilityLon],
@@ -76,10 +90,11 @@ export const ThreatMap2D: React.FC<ThreatMap2DProps> = ({
       zoomControl: false,
     });
 
-    // Satellite layer via CartoDB Voyager (best free satellite-ish tile)
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; CartoDB &copy; OpenStreetMap contributors',
-      maxZoom: 19,
+    const tileProvider = getActiveMapTileProvider();
+    L.tileLayer(tileProvider.url, {
+      attribution: tileProvider.attribution,
+      maxZoom: tileProvider.maxZoom,
+      subdomains: tileProvider.subdomains || ['a', 'b', 'c'],
     }).addTo(map);
 
     // Zoom control bottom-right
@@ -88,24 +103,42 @@ export const ThreatMap2D: React.FC<ThreatMap2DProps> = ({
     // Scale bar (bottom-left, metric)
     L.control.scale({ position: 'bottomleft', imperial: false, maxWidth: 150 }).addTo(map);
 
-    layerGroupRef.current = L.layerGroup().addTo(map);
+    const group = L.layerGroup().addTo(map);
+    layerGroupRef.current = group;
     mapInstanceRef.current = map;
 
     // Expose map instance for Export PNG
-    if (mapRef) mapRef.current = map;
+    if (mapRef) {
+      mapRef.current = map;
+    }
+
+    // Force map to compute correct dimensions once mounted
+    const resizeTimer = setTimeout(() => {
+      map.invalidateSize();
+    }, 150);
+
+    const handleResize = () => {
+      map.invalidateSize();
+    };
+    window.addEventListener('resize', handleResize);
 
     // Click-to-move facility handler
-    map.on('click', (e: any) => {
+    map.on('click', (e: L.LeafletMouseEvent) => {
       if (onFacilityMove) {
         onFacilityMove(e.latlng.lat, e.latlng.lng);
       }
     });
 
     return () => {
+      clearTimeout(resizeTimer);
+      window.removeEventListener('resize', handleResize);
       map.off();
       map.remove();
       mapInstanceRef.current = null;
       layerGroupRef.current = null;
+      if (mapRef) {
+        mapRef.current = null;
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -123,12 +156,64 @@ export const ThreatMap2D: React.FC<ThreatMap2DProps> = ({
     const group = layerGroupRef.current;
     if (!map || !group) return;
 
-    const L = (window as any).L;
-    if (!L) return;
-
     group.clearLayers();
 
-    // ── Facility marker ────────────────────────────────────────────────────
+    // ── Zone polygons — render outermost first (green → red on top) ────────
+    if (threatData && threatData.threat_bands) {
+      ZONE_STYLES.forEach(({ key, color, fillOpacity, weight, label, threshold }) => {
+        const band = threatData.threat_bands[key];
+        if (!band || !band.polygon || band.polygon.length < 3) return;
+
+        // Leaflet polygon expects [lat, lon][] coordinates
+        const leafletCoords = band.polygon.map(([lat, lon]) => [lat, lon] as [number, number]);
+
+        L.polygon(leafletCoords, {
+          color,
+          weight,
+          fillColor: color,
+          fillOpacity,
+          dashArray: key === 'green_awareness' ? '6 4' : undefined,
+        })
+          .addTo(group)
+          .bindTooltip(
+            `<div style="font-family:monospace;font-size:11px;font-weight:bold;line-height:1.4;">
+              <span style="color:${color};font-size:12px;">●</span> ${label}<br/>
+              Threshold: ${threshold}<br/>
+              Max radius: ${band.max_radius_m} m
+             </div>`,
+            { sticky: true }
+          );
+      });
+    }
+
+    // ── Safe approach arrow (green dashed polyline toward upwind bearing) ──
+    const safeVec = threatData?.safe_approach_vector;
+    if (safeVec && safeVec.safe_angle_deg !== undefined) {
+      const safeRad = (safeVec.safe_angle_deg * Math.PI) / 180;
+      const maxR = threatData?.threat_bands?.green_awareness?.max_radius_m ?? 800;
+      const vecLen = maxR * 1.25; // extend arrow beyond outermost zone
+      const dx = vecLen * Math.sin(safeRad);
+      const dy = vecLen * Math.cos(safeRad);
+      const endLat = facilityLat + dy / 111320;
+      const endLon = facilityLon + dx / (111320 * Math.cos((facilityLat * Math.PI) / 180));
+
+      const arrowLine = L.polyline([[facilityLat, facilityLon], [endLat, endLon]], {
+        color: '#10b981',
+        weight: 4,
+        dashArray: '14 8',
+        lineCap: 'round',
+      }).addTo(group);
+
+      arrowLine.bindTooltip(
+        `<div style="font-family:monospace;font-size:11px;font-weight:bold;color:#065f46;">
+          ↑ SAFE APPROACH ROUTE<br/>
+          ${safeVec.cardinal_direction} — ${safeVec.safe_angle_deg}° (Upwind)
+         </div>`,
+        { permanent: true, direction: 'top', className: 'safe-approach-tooltip' }
+      );
+    }
+
+    // ── Facility marker (rendered on top of polygons) ─────────────────────
     const icon = L.divIcon({
       className: '',
       html: `<div style="
@@ -144,64 +229,13 @@ export const ThreatMap2D: React.FC<ThreatMap2DProps> = ({
 
     const marker = L.marker([facilityLat, facilityLon], { icon }).addTo(group);
     marker.bindPopup(`
-      <div style="font-family:monospace;font-size:12px;color:#1e293b;">
-        <strong>${threatData?.facility_name ?? 'Industrial Facility'}</strong><br/>
-        ${threatData?.physics_metrics?.primary_hazard ?? ''}<br/>
-        <span style="color:#6b7280;font-size:10px;">Click map to relocate facility</span>
+      <div style="font-family:monospace;font-size:12px;color:#1e293b;line-height:1.4;">
+        <strong>${threatData?.facility_name ?? 'Industrial Storage Facility'}</strong><br/>
+        <span style="color:#ef4444;font-weight:bold;">${threatData?.physics_metrics?.primary_hazard ?? 'Fire & Explosion Hazard Origin'}</span><br/>
+        <span style="color:#64748b;font-size:10px;">Lat: ${facilityLat.toFixed(4)}, Lon: ${facilityLon.toFixed(4)}</span><br/>
+        <span style="color:#2563eb;font-size:10px;">Click anywhere on map to relocate facility</span>
       </div>
     `);
-
-    if (!threatData) return;
-
-    // ── Zone polygons — render outermost first (green → red on top) ────────
-    ZONE_STYLES.forEach(({ key, color, fillOpacity, weight, label, threshold }) => {
-      const band = threatData.threat_bands[key];
-      if (!band || band.polygon.length < 3) return;
-
-      L.polygon(band.polygon, {
-        color,
-        weight,
-        fillColor: color,
-        fillOpacity,
-        dashArray: key === 'green_awareness' ? '6 4' : undefined,
-      })
-        .addTo(group)
-        .bindTooltip(
-          `<span style="font-family:monospace;font-size:11px;font-weight:bold;">
-            ${label}<br/>
-            Threshold: ${threshold}<br/>
-            Max radius: ${band.max_radius_m} m
-           </span>`,
-          { sticky: true }
-        );
-    });
-
-    // ── Safe approach arrow (green dashed polyline toward upwind bearing) ──
-    const safeVec = threatData.safe_approach_vector;
-    if (safeVec && safeVec.safe_angle_deg !== undefined) {
-      const safeRad = (safeVec.safe_angle_deg * Math.PI) / 180;
-      const maxR = threatData.threat_bands.green_awareness?.max_radius_m ?? 800;
-      const vecLen = maxR * 1.25; // extend arrow beyond outermost zone
-      const dx = vecLen * Math.sin(safeRad);
-      const dy = vecLen * Math.cos(safeRad);
-      const endLat = facilityLat + dy / 111320;
-      const endLon = facilityLon + dx / (111320 * Math.cos((facilityLat * Math.PI) / 180));
-
-      const arrowLine = L.polyline([[facilityLat, facilityLon], [endLat, endLon]], {
-        color: '#10b981',
-        weight: 4,
-        dashArray: '14 8',
-        lineCap: 'round',
-      }).addTo(group);
-
-      arrowLine.bindTooltip(
-        `<span style="font-family:monospace;font-size:11px;font-weight:bold;color:#065f46;">
-          ↑ SAFE APPROACH<br/>
-          ${safeVec.cardinal_direction} — ${safeVec.safe_angle_deg}° (Upwind)
-         </span>`,
-        { permanent: true, direction: 'top', className: 'safe-approach-tooltip' }
-      );
-    }
   }, [threatData, facilityLat, facilityLon]);
 
   return (
@@ -239,7 +273,7 @@ export const ThreatMap2D: React.FC<ThreatMap2DProps> = ({
           <div className="text-cyan-400 font-bold uppercase tracking-wider text-[9px] mb-1">
             Hazard Zone Legend
           </div>
-          {[...ZONE_STYLES].reverse().map(({ key, color, label, threshold }) => {
+          {[...ZONE_STYLES].reverse().map(({ key, color, label }) => {
             const band = threatData.threat_bands[key];
             return (
               <div key={key} className="flex items-center gap-2">
