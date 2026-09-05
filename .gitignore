@@ -77,8 +77,6 @@ lerna-debug.log*
 
 # ── Environment Variables & Secrets ──────────────────────────────────────────
 # Ignore local environment files containing credentials
-.env
-.env.local
 .env.*.local
 *.env
 *.env.local
@@ -109,9 +107,9 @@ Thumbs.db
 
 # ── IDEs & Text Editors ──────────────────────────────────────────────────────
 .idea/
-.vscode/
 *.sublime-workspace
 *.sublime-project
 *.swp
 *.swo
 *~
+config.bat
